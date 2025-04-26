@@ -193,7 +193,7 @@ class GameScene extends Phaser.Scene {
             const time = this.time.now;
             if (time > lastFired) {
                 fireBullet(this);
-                lastFired = time + 750; // 5x slower fire rate (was 150)
+                lastFired = time + 250; // 3x faster fire rate (was 750)
             }
         } else {
             // Handle keyboard firing
@@ -212,7 +212,7 @@ const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
     width: 600,
-    height: 800,
+    height: 1040, // Increased from 800 to 1040 (30% taller)
     backgroundColor: 0x000033,
     transparent: true,
     scale: {
@@ -223,7 +223,7 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 },
-            debug: true // Enable debug visualization
+            debug: false // Disable debug visualization of bounding boxes
         }
     },
     scene: GameScene

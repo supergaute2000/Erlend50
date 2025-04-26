@@ -150,32 +150,20 @@ export function spawnEnemy(scene) {
     // Final offset: less negative means shifted right/down
     enemy.body.offset.set(-extraSize + rightShift, -extraSize + downShift);
     
-    // Fixed offset adjustment in pixels (additional fine-tuning)
-    // This adds a fixed pixel offset in addition to the percentage-based offset
-    enemy.body.offset.x += 30; // Push 30 more pixels right
-    enemy.body.offset.y += 20; // Push 20 more pixels down
-    
     // Force-set the body position to match the sprite
     enemy.body.reset(x, y);
     
     // Don't collide with world bounds - we'll handle cleanup ourselves
     enemy.body.setCollideWorldBounds(false);
     
-    // Enable debug to show the body
-    enemy.body.debugShowBody = true;
-    enemy.body.debugBodyColor = 0xff00ff;
+    // Debug visualization no longer needed
+    // enemy.body.debugShowBody = true;
+    // enemy.body.debugBodyColor = 0xff00ff;
     
-    // Log the final hitbox position for debugging
-    console.log('Enemy hitbox:', {
-        spriteX: enemy.x,
-        spriteY: enemy.y,
-        boxX: enemy.body.x,
-        boxY: enemy.body.y,
-        boxWidth: enemy.body.width,
-        boxHeight: enemy.body.height,
-        offsetX: enemy.body.offset.x,
-        offsetY: enemy.body.offset.y
-    });
+    // Fixed offset adjustment in pixels (additional fine-tuning)
+    // This adds a fixed pixel offset in addition to the percentage-based offset
+    enemy.body.offset.x += 30; // Push 30 more pixels right
+    enemy.body.offset.y += 20; // Push 20 more pixels down
     
     // Store enemy properties
     enemy.health = enemyConfig.health || 10;
