@@ -2,50 +2,23 @@
 const LEVELS = {
     1: {
         name: "Erlend 50 år!",
-        background: "skærgård",
+        background: {
+            layers: ['layer1', 'layer2', 'layer3'],
+            scrollSpeed: 1.5
+        },
         enemies: [
-            {
-                type: "allergy",
-                color: 0xff0000,
-                speed: 100,
-                health: 1,
-                points: 10,
-                pattern: "zigzag"
-            },
-            {
-                type: "potetgullhår",
-                color: 0xffa500,
-                speed: 80,
-                health: 2,
-                points: 20,
-                pattern: "chase"
-            },
-            {
-                type: "c64",
-                color: 0x00ff00,
-                speed: 120,
-                health: 1,
-                points: 15,
-                pattern: "straight"
-            }
+            { type: 'basic', health: 10, speed: 200, points: 10, spawnRate: 2500 },
+            { type: 'fast', health: 5, speed: 300, points: 15, spawnRate: 4000 }
         ],
         powerUps: [
-            {
-                type: "shield",
-                color: 0x0000ff,
-                duration: 5000
-            },
-            {
-                type: "doubleShot",
-                color: 0xffff00,
-                duration: 10000
-            }
+            { type: 'shield', chance: 0.2 },
+            { type: 'doubleShot', chance: 0.2 },
+            { type: 'health', chance: 0.3 }
         ],
         boss: {
-            type: "potetgullhår",
-            health: 10,
-            patterns: ["spiral", "wave"],
-            color: 0xffa500
+            type: 'level1',
+            health: 100,
+            patterns: ['circle', 'zigzag']
         }
     },
     2: {
@@ -247,11 +220,41 @@ const LEVELS = {
     }
 };
 
-// Enemy movement patterns
+// Enemy spawn patterns
 const PATTERNS = {
-    zigzag: (enemy, time) => {
-        enemy.x += Math.sin(time * 0.003) * 2;
-        enemy.y += enemy.speed * 0.016;
+    basic: {
+        spawn: (scene, enemy) => {
+            // Vertical-oriented spawn positions
+            const side = Math.random() > 0.5 ? 'left' : 'right';
+            const x = side === 'left' ? 50 : scene.game.config.width - 50;
+            const y = Phaser.Math.Between(50, scene.game.config.height / 3);
+            
+            enemy.setPosition(x, y);
+            
+            // Movement towards player
+            const angle = Phaser.Math.Angle.Between(x, y, scene.player.x, scene.player.y);
+            enemy.setVelocity(
+                Math.cos(angle) * enemy.speed,
+                Math.sin(angle) * enemy.speed
+            );
+        }
+    },
+    zigzag: {
+        spawn: (scene, enemy) => {
+            const x = Phaser.Math.Between(50, scene.game.config.width - 50);
+            enemy.setPosition(x, -50);
+            
+            // Vertical zigzag pattern
+            scene.tweens.add({
+                targets: enemy,
+                x: x + 100,
+                y: '+=' + (scene.game.config.height / 2),
+                duration: 2000,
+                ease: 'Sine.easeInOut',
+                yoyo: true,
+                repeat: -1
+            });
+        }
     },
     chase: (enemy, time, player) => {
         const dx = player.x - enemy.x;
@@ -284,8 +287,30 @@ const PATTERNS = {
     }
 };
 
-// Boss patterns
+// Boss patterns adjusted for vertical layout
 const BOSS_PATTERNS = {
+    circle: {
+        duration: 5000,
+        execute: (boss, scene) => {
+            scene.tweens.add({
+                targets: boss,
+                x: scene.game.config.width / 2,
+                y: scene.game.config.height / 4,
+                duration: 1000,
+                ease: 'Sine.easeInOut',
+                onComplete: () => {
+                    scene.tweens.add({
+                        targets: boss,
+                        angle: 360,
+                        radius: 100,
+                        duration: 4000,
+                        ease: 'Linear',
+                        repeat: -1
+                    });
+                }
+            });
+        }
+    },
     spiral: (boss, time) => {
         const angle = time * 0.003;
         const radius = 100 + Math.sin(time * 0.002) * 50;

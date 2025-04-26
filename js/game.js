@@ -94,8 +94,8 @@ export function spawnEnemy(scene) {
     const side = Math.floor(Math.random() * 3); // 0: top, 1: right, 2: left
     let x, y;
     
-    // Enemy size increased by 1.5x
-    const enemySize = 128; // 1.5x larger than before
+    // Enemy size adjusted to match player size
+    const enemySize = 96; // Slightly smaller than player for better collision
     
     switch(side) {
         case 0: // top
@@ -123,6 +123,10 @@ export function spawnEnemy(scene) {
     
     // Add physics to enemy
     scene.physics.add.existing(enemy);
+    
+    // Set a smaller collision body for more precise collisions
+    enemy.body.setSize(enemySize * 0.8, enemySize * 0.8);
+    enemy.body.setOffset(enemySize * 0.1, enemySize * 0.1);
     
     // Don't collide with world bounds - we'll handle cleanup ourselves
     enemy.body.setCollideWorldBounds(false);
@@ -169,72 +173,91 @@ export function spawnPowerUp(scene) {
         return;
     }
 
-    // Define power-up types and their colors
+    // Define power-up types with improved visuals
     const powerUpTypes = [
-        { type: 'shield', color: 0x00ff00 },
-        { type: 'doubleShot', color: 0xff00ff },
-        { type: 'speedBoost', color: 0xffff00 },
-        { type: 'health', color: 0xff0000, useEvaSprite: true }
+        { 
+            type: 'shield', 
+            color: 0x00ff00
+        },
+        { 
+            type: 'doubleShot', 
+            color: 0xff00ff
+        },
+        { 
+            type: 'speedBoost', 
+            color: 0xffff00
+        },
+        { 
+            type: 'health', 
+            color: 0xff0000, 
+            useEvaSprite: true 
+        }
     ];
     
     // Randomly select a power-up type
     const powerUpConfig = powerUpTypes[Math.floor(Math.random() * powerUpTypes.length)];
     
-    const x = Phaser.Math.Between(50, 750);
-    const y = Phaser.Math.Between(50, 550);
+    // Position power-up in the top portion of the screen
+    const x = Phaser.Math.Between(50, scene.game.config.width - 50);
+    const y = -50; // Start above the screen
     
     let powerUp;
     try {
         if (powerUpConfig.useEvaSprite) {
             // Create Eva sprite for health power-up
             powerUp = scene.add.sprite(x, y, 'eva');
-            powerUp.setDisplaySize(128, 128); // Set size to 128x128 (4x larger than original)
+            powerUp.setDisplaySize(64, 64);
         } else {
-            // Create rectangle for other power-ups
-            powerUp = scene.add.rectangle(x, y, 30, 30, powerUpConfig.color);
-        }
-        
-        if (powerUp) {
-            scene.physics.add.existing(powerUp);
-            powerUp.type = powerUpConfig.type;
-            powerUps.add(powerUp);
+            // Create a rectangle with a glowing effect for other power-ups
+            powerUp = scene.add.rectangle(x, y, 48, 48, powerUpConfig.color);
             
-            // Add movement to power-up
-            const speed = 100;
-            const angle = Phaser.Math.Between(0, 360);
-            powerUp.body.setVelocity(
-                Math.cos(angle * Math.PI / 180) * speed,
-                Math.sin(angle * Math.PI / 180) * speed
-            );
-            
-            // Bounce off walls
-            powerUp.body.setBounce(1);
-            powerUp.body.setCollideWorldBounds(true);
-            
-            // Add a timer to remove the power-up after 5 seconds if not collected
-            scene.time.delayedCall(5000, () => {
-                if (powerUp.active) {
-                    console.log(`Power-up ${powerUpConfig.type} timed out and removed`);
-                    powerUp.destroy();
-                }
+            // Add a pulsing effect
+            scene.tweens.add({
+                targets: powerUp,
+                alpha: 0.6,
+                duration: 1000,
+                yoyo: true,
+                repeat: -1
             });
             
-            // Add floating animation for Eva sprite
-            if (powerUpConfig.useEvaSprite) {
-                scene.tweens.add({
-                    targets: powerUp,
-                    y: y + 10,
-                    duration: 1000,
-                    yoyo: true,
-                    repeat: -1,
-                    ease: 'Sine.easeInOut'
-                });
-            }
+            // Add an outline glow
+            const glow = scene.add.rectangle(x, y, 56, 56, powerUpConfig.color, 0.3);
+            glow.setDepth(powerUp.depth - 1);
             
-            console.log(`Successfully spawned ${powerUpConfig.type} power-up at (${x}, ${y})`);
+            // Make the glow follow the power-up
+            powerUp.glow = glow;
+            powerUp.update = function() {
+                if (this.glow) {
+                    this.glow.x = this.x;
+                    this.glow.y = this.y;
+                }
+                // Destroy if off screen
+                if (this.y > scene.game.config.height + 100) {
+                    if (this.glow) this.glow.destroy();
+                    this.destroy();
+                }
+            };
         }
+        
+        // Add physics to power-up
+        scene.physics.world.enable(powerUp);
+        powerUp.body.setSize(48, 48);
+        powerUp.body.setOffset(8, 8);
+        
+        // Set vertical velocity for downward movement
+        powerUp.body.setVelocityY(150);
+        
+        // Set power-up properties
+        powerUp.type = powerUpConfig.type;
+        powerUp.setDepth(5); // Ensure power-ups are visible above background
+        
+        // Add to power-ups group
+        powerUps.add(powerUp);
+        
+        console.log(`Power-up spawned: ${powerUpConfig.type} at (${x}, ${y})`);
+        
     } catch (error) {
-        console.error('Error spawning power-up:', error);
+        console.error('Error creating power-up:', error);
     }
 }
 

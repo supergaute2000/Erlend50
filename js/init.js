@@ -4,7 +4,7 @@ import { spawnEnemy, spawnPowerUp, playerHitEnemy } from './game.js';
 import { SoundManager } from './sound.js';
 import { BackgroundManager } from './background.js';
 
-// Game variables
+// Game variables - individual exports
 export let player;
 export let cursors;
 export let fireButton;
@@ -16,12 +16,16 @@ export let health = 100;
 export let currentLevel = 1;
 export let isGameOver = false;
 export let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+export let backgroundManager;
+export let game;
+
+// Game state variables
 export let currentBoss = null;
 export let bossHealth = 0;
 export let bossHealthText;
 export let bossPatternIndex = 0;
 export let bossPatternTimer = 0;
-export let bossPatternDuration = 5000; // 5 seconds per pattern
+export let bossPatternDuration = 5000;
 export let currentEnemyTypes = [];
 export let currentPowerUpTypes = [];
 export let backgroundImage;
@@ -34,14 +38,13 @@ export let powerUpText;
 export let gameComplete = false;
 export let soundManager;
 export let uiManager;
-export let gameState = 'playing'; // 'playing', 'levelTransition', 'gameOver', 'quiz'
+export let gameState = 'playing';
 export let lastFired = 0;
 export let levelComplete = false;
 export let levelText;
 export let levelTransition = false;
 export let levelTransitionTimer = 0;
-export let levelTransitionDuration = 3000; // 3 seconds
-export let backgroundManager;
+export let levelTransitionDuration = 3000;
 
 // Game scene class
 class GameScene extends Phaser.Scene {
@@ -152,7 +155,8 @@ class GameScene extends Phaser.Scene {
             currentLevel: currentLevel,
             isGameOver: isGameOver,
             isInvincible: false,
-            scene: this  // Store the scene reference
+            scene: this,
+            shootingCooldown: 150 // Reduced from 250 to 150 for faster shooting
         };
         
         // Setup collisions
@@ -211,14 +215,13 @@ class GameScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
+    width: 600,
+    height: 800,
+    backgroundColor: 0x000033,
     transparent: true,
     scale: {
         mode: Phaser.Scale.FIT,
-        width: 800,  // Match background width
-        height: 800, // Match background height
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        autoRound: true,
-        expandParent: true
+        autoCenter: Phaser.Scale.CENTER_BOTH
     },
     physics: {
         default: 'arcade',
@@ -231,7 +234,7 @@ const config = {
 };
 
 // Initialize game
-export const game = new Phaser.Game(config);
+game = new Phaser.Game(config);
 
 // Helper functions
 function setupMobileControls(scene) {
@@ -341,23 +344,26 @@ function fireBullet(scene) {
         const bulletSpacing = 20; // Space between bullets
         
         // Left bullet
-        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, 8, 16, 0xffff00);
+        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, 16, 24, 0xffff00);
         bullets.add(bullet1);
         scene.physics.add.existing(bullet1);
+        bullet1.body.setSize(16, 24); // Match visual size
         bullet1.body.setVelocityY(-400);
         
         // Right bullet
-        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, 8, 16, 0xffff00);
+        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, 16, 24, 0xffff00);
         bullets.add(bullet2);
         scene.physics.add.existing(bullet2);
+        bullet2.body.setSize(16, 24); // Match visual size
         bullet2.body.setVelocityY(-400);
         
         console.log('Double shot fired!');
     } else {
         // Create a single bullet
-        const bullet = scene.add.rectangle(player.x, player.y, 8, 16, 0xffff00);
+        const bullet = scene.add.rectangle(player.x, player.y, 16, 24, 0xffff00);
         bullets.add(bullet);
         scene.physics.add.existing(bullet);
+        bullet.body.setSize(16, 24); // Match visual size
         bullet.body.setVelocityY(-400);
     }
     
@@ -366,8 +372,25 @@ function fireBullet(scene) {
 }
 
 function bulletHitEnemy(bullet, enemy) {
+    // Log collision for debugging
+    console.log('Bullet hit enemy:', {
+        bulletPos: { x: bullet.x, y: bullet.y },
+        enemyPos: { x: enemy.x, y: enemy.y }
+    });
+    
     bullet.destroy();
     enemy.health -= 10;
+    
+    // Visual feedback
+    const hitEffect = bullet.scene.add.circle(enemy.x, enemy.y, 20, 0xffff00, 0.5);
+    bullet.scene.tweens.add({
+        targets: hitEffect,
+        scale: 2,
+        alpha: 0,
+        duration: 200,
+        onComplete: () => hitEffect.destroy()
+    });
+    
     if (enemy.health <= 0) {
         enemy.destroy();
         score += enemy.points;
@@ -558,7 +581,10 @@ export function deactivatePowerUp(type, scene) {
     }
 }
 
+// Export function to start a level
 export function startLevel(scene, level) {
+    console.log('Starting level:', level);
+    
     // Clear existing enemies and power-ups
     enemies.clear(true, true);
     powerUps.clear(true, true);
@@ -568,7 +594,7 @@ export function startLevel(scene, level) {
     }
     
     // Reset player position
-    player.setPosition(400, 500); // Center player horizontally
+    player.setPosition(300, 700);
     
     // Update window.gameState.currentLevel
     window.gameState.currentLevel = level;
@@ -579,17 +605,22 @@ export function startLevel(scene, level) {
         return;
     }
     
-    // Set current level configurations
-    currentEnemyTypes = LEVELS[level].enemies;
-    currentPowerUpTypes = LEVELS[level].powerUps;
+    // Initialize background layers
+    const levelConfig = LEVELS[level];
+    console.log('Level config:', levelConfig);
     
-    // Remove old background if it exists
-    if (backgroundImage) {
-        backgroundImage.destroy();
+    if (levelConfig.background && levelConfig.background.layers) {
+        console.log('Creating background layers:', levelConfig.background.layers);
+        backgroundManager.createLayers(levelConfig.background.layers);
+        backgroundManager.setScrollSpeed(levelConfig.background.scrollSpeed || -1);
     }
     
+    // Set current level configurations
+    currentEnemyTypes = levelConfig.enemies;
+    currentPowerUpTypes = levelConfig.powerUps;
+    
     // Display level text
-    levelText.setText(LEVELS[level].name);
+    levelText.setText(levelConfig.name);
     levelText.setVisible(true);
     
     // Hide level text after delay
@@ -599,31 +630,30 @@ export function startLevel(scene, level) {
     
     // Spawn enemies more frequently
     scene.time.addEvent({
-        delay: 400, // Spawn every 0.4 seconds (was 800)
+        delay: 400,
         callback: () => {
             if (!window.gameState.isGameOver) {
-                // Spawn multiple enemies at once
-                const spawnCount = 2 + Math.floor(level / 2); // Double the base spawn count
+                const spawnCount = 2 + Math.floor(level / 2);
                 for (let i = 0; i < spawnCount; i++) {
                     spawnEnemy(scene);
                 }
-                console.log(`DEBUG: Spawned ${spawnCount} enemies`);
             }
         },
         loop: true
     });
     
-    // Spawn power-ups slightly more frequently
+    // Spawn power-ups
     scene.time.addEvent({
-        delay: 8000, // Every 8 seconds (was 10000)
+        delay: 8000,
         callback: () => {
             if (!window.gameState.isGameOver) {
                 spawnPowerUp(scene);
-                console.log('DEBUG: Power-up spawned');
             }
         },
         loop: true
     });
+    
+    console.log('Level started successfully');
 }
 
 // Update enemies
