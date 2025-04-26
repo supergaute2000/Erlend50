@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bror 50 - Debug Console</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #1a1a2e;
+            color: #fff;
+            font-family: monospace;
+        }
+        .game-section {
+            position: relative;
+            width: 400px;
+            margin: 0 auto;
+        }
+        #game-container {
+            width: 400px;
+            height: 600px;
+            border: 2px solid #333;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+        .game-ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 11;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 2px #000;
+        }
+        #score-container {
+            top: 10px;
+        }
+        #health-container {
+            top: 40px;
+        }
+        .debug-section {
+            width: 400px;
+            margin: 620px auto 0;
+        }
+        #debug-output {
+            width: 400px;
+            height: 200px;
+            margin: 20px auto;
+            background: #000;
+            color: #0f0;
+            padding: 10px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .controls {
+            width: 400px;
+            margin: 20px auto;
+            text-align: center;
+        }
+        button {
+            background: #333;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-section">
+        <div id="game-container"></div>
+        <div id="score-container" class="game-ui">Score: 0</div>
+        <div id="health-container" class="game-ui">Health: 100</div>
+    </div>
+    <div class="debug-section">
+        <div class="controls">
+            <button onclick="reloadGame()">Reload Game</button>
+            <button onclick="clearConsole()">Clear Console</button>
+        </div>
+        <div id="debug-output"></div>
+    </div>
+
+    <script>
+        // Store original console methods
+        const originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn
+        };
+
+        // Set to track circular references
+        const seen = new WeakSet();
+
+        // Get debug output element
+        const debugOutput = document.getElementById('debug-output');
+
+        // Override console methods to also log to our debug panel
+        console.log = function() {
+            originalConsole.log.apply(console, arguments);
+            appendToDebug('LOG', arguments);
+        };
+
+        console.error = function() {
+            originalConsole.error.apply(console, arguments);
+            appendToDebug('ERROR', arguments, '#ff0000');
+        };
+
+        console.warn = function() {
+            originalConsole.warn.apply(console, arguments);
+            appendToDebug('WARN', arguments, '#ffff00');
+        };
+
+        function appendToDebug(type, args, color = '#0f0') {
+            const message = Array.from(args).map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        // Try to stringify with a replacer function to handle circular references
+                        return JSON.stringify(arg, (key, value) => {
+                            // Skip circular references
+                            if (typeof value === 'object' && value !== null) {
+                                if (seen.has(value)) {
+                                    return '[Circular]';
+                                }
+                                seen.add(value);
+                            }
+                            return value;
+                        });
+                    } catch (e) {
+                        // If stringification fails, return a simple representation
+                        return `[Object: ${arg.constructor ? arg.constructor.name : 'Unknown'}]`;
+                    } finally {
+                        // Clear the seen set for the next object
+                        seen.clear();
+                    }
+                }
+                return arg;
+            }).join(' ');
+            
+            const div = document.createElement('div');
+            div.style.color = color;
+            div.textContent = `[${type}] ${message}`;
+            debugOutput.appendChild(div);
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+
+        // Handle uncaught errors
+        window.onerror = function(msg, url, line, col, error) {
+            appendToDebug('ERROR', [`${msg}\nAt: ${url}:${line}:${col}\n${error?.stack || ''}`], '#ff0000');
+            return false;
+        };
+
+        function reloadGame() {
+            console.log('Reloading game...');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        }
+
+        function clearConsole() {
+            debugOutput.innerHTML = '';
+            console.log('Console cleared');
+        }
+
+        // Load Phaser
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js';
+        script.onload = () => {
+            console.log('Phaser loaded successfully');
+            // Load game scripts
+            loadGameScripts();
+        };
+        script.onerror = () => {
+            console.error('Failed to load Phaser');
+        };
+        document.head.appendChild(script);
+
+        function loadGameScripts() {
+            const scripts = [
+                'js/levels.js',
+                'js/quiz.js',
+                'js/sound.js',
+                'js/ui.js',
+                'js/game.js'
+            ];
+
+            scripts.forEach(src => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.type = 'module';
+                script.onload = () => console.log(`Loaded ${src}`);
+                script.onerror = () => console.error(`Failed to load ${src}`);
+                document.head.appendChild(script);
+            });
+        }
+    </script>
+</body>
+</html> 

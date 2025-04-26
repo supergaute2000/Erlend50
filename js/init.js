@@ -1,0 +1,496 @@
+// Game configuration
+import { LEVELS } from './levels.js';
+import { spawnEnemy, spawnPowerUp, playerHitEnemy } from './game.js';
+import { SoundManager } from './sound.js';
+
+// Game variables
+export let player;
+export let cursors;
+export let fireButton;
+export let bullets;
+export let enemies;
+export let powerUps;
+export let score = 0;
+export let health = 100;
+export let currentLevel = 1;
+export let isGameOver = false;
+export let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+export let currentBoss = null;
+export let bossHealth = 0;
+export let bossHealthText;
+export let bossPatternIndex = 0;
+export let bossPatternTimer = 0;
+export let bossPatternDuration = 5000; // 5 seconds per pattern
+export let currentEnemyTypes = [];
+export let currentPowerUpTypes = [];
+export let backgroundImage;
+export let backgroundTween;
+export let powerUpActive = false;
+export let powerUpTimer = 0;
+export let powerUpDuration = 0;
+export let powerUpType = '';
+export let powerUpText;
+export let gameComplete = false;
+export let soundManager;
+export let uiManager;
+export let gameState = 'playing'; // 'playing', 'levelTransition', 'gameOver', 'quiz'
+export let lastFired = 0;
+export let levelComplete = false;
+export let levelText;
+export let levelTransition = false;
+export let levelTransitionTimer = 0;
+export let levelTransitionDuration = 3000; // 3 seconds
+
+// Game scene class
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene' });
+    }
+
+    preload() {
+        // We'll use basic shapes instead of images for now
+        // The actual images will be loaded later
+    }
+
+    create() {
+        // Initialize game objects
+        bullets = this.add.group();
+        enemies = this.add.group();
+        powerUps = this.add.group();
+        
+        // Create player using a rectangle
+        player = this.add.rectangle(200, 500, 32, 32, 0x00ff00);
+        this.physics.add.existing(player);
+        player.body.setCollideWorldBounds(true);
+        
+        // Setup controls
+        cursors = this.input.keyboard.createCursorKeys();
+        fireButton = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        
+        // Setup mobile controls if needed
+        if (isMobile) {
+            setupMobileControls(this);
+        }
+        
+        // Initialize game state in window object for global access
+        window.gameState = {
+            health: health,
+            score: score,
+            currentLevel: currentLevel,
+            isGameOver: isGameOver,
+            isInvincible: false,
+            scene: this  // Store the scene reference
+        };
+        
+        // Setup collisions
+        this.physics.add.overlap(player, enemies, (player, enemy) => playerHitEnemy(player, enemy, this), null, this);
+        this.physics.add.collider(bullets, enemies, bulletHitEnemy, null, this);
+        this.physics.add.collider(player, powerUps, collectPowerUp, null, this);
+        
+        // Create level text
+        levelText = this.add.text(200, 300, '', {
+            fontSize: '32px',
+            fill: '#fff'
+        });
+        levelText.setOrigin(0.5);
+        levelText.setVisible(false);
+        
+        // Initialize sound manager
+        soundManager = new SoundManager(this);
+        
+        // Start first level
+        startLevel(this, 1);
+    }
+
+    update() {
+        if (window.gameState.isGameOver) return;
+        
+        // Handle player movement
+        handlePlayerMovement(this);
+        
+        // Handle shooting
+        if (Phaser.Input.Keyboard.JustDown(fireButton)) {
+            fireBullet(this);
+        }
+        
+        // Update enemies
+        updateEnemies(this);
+        
+        // Check for collisions
+        this.physics.overlap(bullets, enemies, bulletHitEnemy, null, this);
+        this.physics.overlap(player, powerUps, collectPowerUp, null, this);
+    }
+}
+
+// Game configuration
+const config = {
+    type: Phaser.AUTO,
+    width: 400,
+    height: 600,
+    parent: 'game-container',
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: 0 },
+            debug: false
+        }
+    },
+    scene: GameScene
+};
+
+// Initialize game
+export const game = new Phaser.Game(config);
+
+// Helper functions
+function setupMobileControls(scene) {
+    const joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
+        x: 100,
+        y: 500,
+        radius: 50,
+        base: scene.add.circle(0, 0, 50, 0x888888, 0.5),
+        thumb: scene.add.circle(0, 0, 25, 0xcccccc, 0.8),
+    });
+    
+    const fireZone = scene.add.zone(700, 500, 100, 100);
+    fireZone.setInteractive();
+    fireZone.on('pointerdown', () => {
+        fireBullet(scene);
+    });
+}
+
+function handlePlayerMovement(scene) {
+    // Use scene.playerSpeed if available, otherwise default to 200
+    const speed = scene.playerSpeed || 200;
+    
+    if (isMobile) {
+        const joystick = scene.plugins.get('rexVirtualJoystick');
+        if (joystick.forceX !== 0 || joystick.forceY !== 0) {
+            player.body.setVelocity(joystick.forceX * speed, joystick.forceY * speed);
+        } else {
+            player.body.setVelocity(0, 0);
+        }
+    } else {
+        if (cursors.left.isDown) {
+            player.body.setVelocityX(-speed);
+        } else if (cursors.right.isDown) {
+            player.body.setVelocityX(speed);
+        } else {
+            player.body.setVelocityX(0);
+        }
+        
+        if (cursors.up.isDown) {
+            player.body.setVelocityY(-speed);
+        } else if (cursors.down.isDown) {
+            player.body.setVelocityY(speed);
+        } else {
+            player.body.setVelocityY(0);
+        }
+    }
+}
+
+function fireBullet(scene) {
+    // Check if double shot is active
+    if (scene.isDoubleShot) {
+        // Create two bullets side by side
+        const bulletSpacing = 20; // Space between bullets
+        
+        // Left bullet
+        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, 8, 16, 0xffff00);
+        bullets.add(bullet1);
+        scene.physics.add.existing(bullet1);
+        bullet1.body.setVelocityY(-400);
+        
+        // Right bullet
+        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, 8, 16, 0xffff00);
+        bullets.add(bullet2);
+        scene.physics.add.existing(bullet2);
+        bullet2.body.setVelocityY(-400);
+        
+        console.log('Double shot fired!');
+    } else {
+        // Create a single bullet
+        const bullet = scene.add.rectangle(player.x, player.y, 8, 16, 0xffff00);
+        bullets.add(bullet);
+        scene.physics.add.existing(bullet);
+        bullet.body.setVelocityY(-400);
+    }
+    
+    // Skip playing sound for now
+    // scene.sound.play('shoot');
+}
+
+function bulletHitEnemy(bullet, enemy) {
+    bullet.destroy();
+    enemy.health -= 10;
+    if (enemy.health <= 0) {
+        enemy.destroy();
+        score += enemy.points;
+        updateScore();
+        // Skip playing sound for now
+        // this.sound.play('explosion');
+    }
+}
+
+function collectPowerUp(player, powerUp) {
+    console.log(`Power-up collected: ${powerUp.type}`);
+    
+    // Special handling for health power-up
+    if (powerUp.type === 'health') {
+        // Log current health
+        console.log(`Health BEFORE collecting health power-up: ${window.gameState.health}`);
+        
+        // Directly increase health
+        const oldHealth = window.gameState.health || 0;
+        window.gameState.health = Math.min(100, oldHealth + 30);
+        const healthGained = window.gameState.health - oldHealth;
+        
+        console.log(`Health restored: +${healthGained} (from ${oldHealth} to ${window.gameState.health})`);
+        
+        // Create visual effect
+        const healthEffect = this.add.circle(player.x, player.y, 40, 0x00ff00, 0.5);
+        this.tweens.add({
+            targets: healthEffect,
+            scale: 2,
+            alpha: 0,
+            duration: 1000,
+            onComplete: () => {
+                healthEffect.destroy();
+            }
+        });
+        
+        // Update health display
+        updateHealth();
+    } else {
+        // For other power-ups, use the normal activation
+        activatePowerUp(powerUp.type, this);
+    }
+    
+    // Destroy the power-up
+    powerUp.destroy();
+}
+
+function updateScore() {
+    const scoreText = document.getElementById('score-container');
+    if (scoreText) {
+        scoreText.textContent = `Score: ${score}`;
+    } else {
+        console.log(`Score: ${score}`);
+    }
+}
+
+// Add the missing updateHealth function
+function updateHealth() {
+    const healthText = document.getElementById('health-container');
+    if (healthText) {
+        healthText.textContent = `Health: ${window.gameState.health}`;
+    } else {
+        console.log(`Health: ${window.gameState.health}`);
+    }
+}
+
+// Power-up related functions
+export function activatePowerUp(type, scene) {
+    console.log(`Activating power-up: ${type}`);
+    
+    // Ensure gameState exists
+    if (!window.gameState) {
+        console.error('window.gameState is not defined in activatePowerUp');
+        window.gameState = { health: 100, score: 0, isGameOver: false, currentLevel: 1, isInvincible: false };
+    }
+    
+    switch(type) {
+        case 'shield':
+            window.gameState.isInvincible = true;
+            window.gameState.shieldHealth = 100;
+            console.log('Shield activated - Player is now invincible');
+            scene.shieldTimer = scene.time.addEvent({
+                delay: 5000,
+                callback: () => {
+                    window.gameState.isInvincible = false;
+                    window.gameState.shieldHealth = 0;
+                    console.log('Shield deactivated - Player is no longer invincible');
+                    deactivatePowerUp('shield', scene);
+                }
+            });
+            break;
+        case 'doubleShot':
+            scene.isDoubleShot = true;
+            console.log('Double shot activated');
+            scene.doubleShotTimer = scene.time.addEvent({
+                delay: 10000,
+                callback: () => {
+                    scene.isDoubleShot = false;
+                    console.log('Double shot deactivated');
+                    deactivatePowerUp('doubleShot', scene);
+                }
+            });
+            break;
+        case 'speedBoost':
+            const originalSpeed = scene.playerSpeed || 200;
+            scene.playerSpeed = originalSpeed * 2; // Double the speed
+            console.log(`Speed boost activated - Speed increased from ${originalSpeed} to ${scene.playerSpeed}`);
+            scene.speedBoostTimer = scene.time.addEvent({
+                delay: 5000,
+                callback: () => {
+                    scene.playerSpeed = originalSpeed;
+                    console.log(`Speed boost deactivated - Speed returned to ${originalSpeed}`);
+                    deactivatePowerUp('speedBoost', scene);
+                }
+            });
+            break;
+        case 'health':
+            // Health power-up is now handled directly in collectPowerUp
+            console.log('Health power-up should be handled in collectPowerUp');
+            break;
+        case 'tripleShot':
+            scene.isTripleShot = true;
+            console.log('Triple shot activated');
+            scene.tripleShotTimer = scene.time.addEvent({
+                delay: 8000,
+                callback: () => {
+                    scene.isTripleShot = false;
+                    console.log('Triple shot deactivated');
+                    deactivatePowerUp('tripleShot', scene);
+                }
+            });
+            break;
+        case 'evasSupport':
+            scene.isEvasSupport = true;
+            console.log('Eva\'s support activated');
+            scene.evasSupportTimer = scene.time.addEvent({
+                delay: 15000,
+                callback: () => {
+                    scene.isEvasSupport = false;
+                    console.log('Eva\'s support deactivated');
+                    deactivatePowerUp('evasSupport', scene);
+                }
+            });
+            break;
+        case 'kidsEnergy':
+            scene.isKidsEnergy = true;
+            console.log('Kid\'s energy activated');
+            scene.kidsEnergyTimer = scene.time.addEvent({
+                delay: 12000,
+                callback: () => {
+                    scene.isKidsEnergy = false;
+                    console.log('Kid\'s energy deactivated');
+                    deactivatePowerUp('kidsEnergy', scene);
+                }
+            });
+            break;
+    }
+    
+    // Update health display
+    updateHealth();
+}
+
+export function deactivatePowerUp(type, scene) {
+    switch(type) {
+        case 'shield':
+            scene.shieldTimer = null;
+            break;
+        case 'doubleShot':
+            scene.doubleShotTimer = null;
+            break;
+        case 'tripleShot':
+            scene.tripleShotTimer = null;
+            break;
+        case 'speedBoost':
+            scene.speedBoostTimer = null;
+            break;
+        case 'evasSupport':
+            scene.evasSupportTimer = null;
+            break;
+        case 'kidsEnergy':
+            scene.kidsEnergyTimer = null;
+            break;
+    }
+    
+    // Show power-up deactivation text
+    if (scene.uiManager) {
+        scene.uiManager.showPowerUp(`${type} power-up deactivated`, 2000);
+    }
+}
+
+export function startLevel(scene, level) {
+    // Clear existing enemies and power-ups
+    enemies.clear(true, true);
+    powerUps.clear(true, true);
+    if (currentBoss) {
+        currentBoss.destroy();
+        currentBoss = null;
+    }
+    
+    // Reset player position
+    player.setPosition(400, 500); // Center player horizontally
+    
+    // Update window.gameState.currentLevel
+    window.gameState.currentLevel = level;
+    
+    // Check if LEVELS is defined and has the current level
+    if (!LEVELS || !LEVELS[level]) {
+        console.error('LEVELS not defined or level not found:', level);
+        return;
+    }
+    
+    // Set current level configurations
+    currentEnemyTypes = LEVELS[level].enemies;
+    currentPowerUpTypes = LEVELS[level].powerUps;
+    
+    // Set background
+    if (backgroundImage) {
+        backgroundImage.destroy();
+    }
+    // Create a simple background rectangle instead of using an image
+    backgroundImage = scene.add.rectangle(400, 300, 800, 600, 0x000033);
+    backgroundImage.setDepth(-1); // Place it behind other objects
+    
+    // Display level text
+    levelText.setText(LEVELS[level].name);
+    levelText.setVisible(true);
+    
+    // Hide level text after delay
+    scene.time.delayedCall(2000, () => {
+        levelText.setVisible(false);
+    });
+    
+    // DEBUG MODE: Continuously spawn enemies
+    console.log('DEBUG MODE: Continuous enemy spawning enabled');
+    
+    // Spawn enemies every 2 seconds
+    scene.time.addEvent({
+        delay: 2000,
+        callback: () => {
+            if (!window.gameState.isGameOver) {
+                spawnEnemy(scene);
+                console.log('DEBUG: Enemy spawned');
+            }
+        },
+        loop: true
+    });
+    
+    // Spawn power-ups every 10 seconds
+    scene.time.addEvent({
+        delay: 10000,
+        callback: () => {
+            if (!window.gameState.isGameOver) {
+                spawnPowerUp(scene);
+                console.log('DEBUG: Power-up spawned');
+            }
+        },
+        loop: true
+    });
+    
+    // Skip playing music for now
+    // soundManager.playMusic(level);
+}
+
+// Update enemies
+export function updateEnemies(scene) {
+    // This function is just a wrapper that calls the actual implementation in game.js
+    // The actual implementation is imported from game.js
+}

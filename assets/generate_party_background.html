@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Party Background</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #333;
+            color: white;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            border: 1px solid #666;
+            margin-bottom: 20px;
+        }
+        .instructions {
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Party Background Generator</h1>
+    <div class="instructions">
+        <p>This page generates a party background image for the final level of Bror 50 - The Game.</p>
+        <p>Instructions:</p>
+        <ol>
+            <li>Click the "Generate" button below</li>
+            <li>Right-click on the canvas and select "Save Image As..."</li>
+            <li>Save the image as "party.png" in the assets folder</li>
+        </ol>
+    </div>
+    <canvas id="canvas" width="800" height="600"></canvas>
+    <br>
+    <button id="generate">Generate</button>
+    
+    <script>
+        document.getElementById('generate').addEventListener('click', function() {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Clear canvas
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, 800, 600);
+            
+            // Draw balloons
+            const colors = ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ff00ff', '#00ffff'];
+            for (let i = 0; i < 30; i++) {
+                const x = Math.random() * 800;
+                const y = Math.random() * 400;
+                const radius = 20 + Math.random() * 20;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                // Balloon
+                ctx.beginPath();
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+                ctx.fillStyle = color;
+                ctx.fill();
+                
+                // String
+                ctx.beginPath();
+                ctx.moveTo(x, y + radius);
+                ctx.quadraticCurveTo(x + 20, y + radius + 50, x + 40, y + radius + 100);
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            
+            // Draw streamers
+            for (let i = 0; i < 10; i++) {
+                const startX = Math.random() * 800;
+                const startY = 0;
+                const endX = Math.random() * 800;
+                const endY = 600;
+                const controlX = Math.random() * 800;
+                const controlY = Math.random() * 600;
+                const color = colors[Math.floor(Math.random() * colors.length)];
+                
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.quadraticCurveTo(controlX, controlY, endX, endY);
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 5;
+                ctx.stroke();
+            }
+            
+            // Draw birthday cake
+            const cakeX = 400;
+            const cakeY = 500;
+            
+            // Cake base
+            ctx.fillStyle = '#8B4513';
+            ctx.fillRect(cakeX - 100, cakeY - 50, 200, 50);
+            
+            // Cake top
+            ctx.fillStyle = '#FF69B4';
+            ctx.fillRect(cakeX - 80, cakeY - 80, 160, 30);
+            
+            // Candles
+            for (let i = 0; i < 5; i++) {
+                const candleX = cakeX - 60 + i * 30;
+                
+                // Candle
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(candleX, cakeY - 100, 5, 20);
+                
+                // Flame
+                ctx.beginPath();
+                ctx.arc(candleX + 2.5, cakeY - 105, 5, 0, Math.PI * 2);
+                ctx.fillStyle = '#FFFF00';
+                ctx.fill();
+            }
+            
+            // Add text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 36px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Happy 50th Birthday, Bror!', 400, 100);
+            
+            console.log('Party background generated! Right-click and save as party.png');
+        });
+    </script>
+</body>
+</html> 
