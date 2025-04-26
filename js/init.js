@@ -210,8 +210,11 @@ export const game = new Phaser.Game(config);
 
 // Helper functions
 function setupMobileControls(scene) {
-    // Make player draggable
-    player.setInteractive({ draggable: true });
+    console.log('Setting up mobile controls');
+    
+    // Make player draggable and interactive
+    player.setInteractive();
+    scene.input.setDraggable(player);
     
     // Track if we're currently dragging
     let isDragging = false;
@@ -220,36 +223,48 @@ function setupMobileControls(scene) {
     // Handle player drag
     scene.input.on('dragstart', (pointer, gameObject) => {
         if (gameObject === player) {
+            console.log('Drag started');
             isDragging = true;
             dragPointer = pointer;
+            // Set player depth to ensure it's above other game objects while dragging
+            player.setDepth(1000);
         }
     });
 
     scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
         if (gameObject === player) {
-            // Keep player within bounds
-            const minX = player.width / 2;
-            const maxX = scene.scale.width - player.width / 2;
-            const minY = player.height / 2;
-            const maxY = scene.scale.height - player.height / 2;
+            // Calculate bounds considering the player's new size
+            const halfWidth = player.displayWidth / 2;
+            const halfHeight = player.displayHeight / 2;
+            const minX = halfWidth;
+            const maxX = scene.scale.width - halfWidth;
+            const minY = halfHeight;
+            const maxY = scene.scale.height - halfHeight;
             
+            // Update player position with bounds checking
             player.x = Phaser.Math.Clamp(dragX, minX, maxX);
             player.y = Phaser.Math.Clamp(dragY, minY, maxY);
+            
+            // Update physics body
+            player.body.reset(player.x, player.y);
         }
     });
 
     scene.input.on('dragend', (pointer, gameObject) => {
         if (gameObject === player) {
+            console.log('Drag ended');
             isDragging = false;
             dragPointer = null;
-            // Stop player movement when drag ends
+            // Reset depth
+            player.setDepth(0);
+            // Stop any momentum
             player.body.setVelocity(0, 0);
         }
     });
 
     // Handle touch for firing
     scene.input.on('pointerdown', (pointer) => {
-        // If this is not the dragging pointer, fire
+        // Only fire if this isn't the drag pointer
         if (!isDragging || pointer !== dragPointer) {
             fireBullet(scene);
             scene.isFiring = true;
@@ -257,7 +272,7 @@ function setupMobileControls(scene) {
     });
 
     scene.input.on('pointerup', (pointer) => {
-        // If this was not the dragging pointer, stop firing
+        // Stop firing if this isn't the drag pointer
         if (!isDragging || pointer !== dragPointer) {
             scene.isFiring = false;
         }
@@ -267,6 +282,8 @@ function setupMobileControls(scene) {
     scene.isFiring = false;
     scene.lastFired = 0;
     scene.fireRate = 200; // Time between shots in milliseconds
+
+    console.log('Mobile controls setup complete');
 }
 
 function handlePlayerMovement(scene) {

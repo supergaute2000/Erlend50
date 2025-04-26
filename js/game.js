@@ -270,9 +270,17 @@ export function playerHitEnemy(player, enemy, scene) {
     // Only take damage if not invincible
     if (!window.gameState.isInvincible) {
         // Take damage
-        window.gameState.health -= 10;
+        window.gameState.health = Math.max(0, window.gameState.health - 10);
         console.log(`Player hit enemy! Health reduced to: ${window.gameState.health}`);
         updateHealth();
+        
+        // Check for game over
+        if (window.gameState.health <= 0) {
+            console.log('Health reached 0 - Game Over');
+            window.gameState.isGameOver = true;
+            showGameOver(scene);
+            return;
+        }
         
         // Flash the player to indicate damage
         player.setTint(0xff0000);
@@ -594,6 +602,9 @@ export function updateHealth() {
     try {
         const healthText = document.getElementById('health-container');
         if (healthText && window.gameState) {
+            // Ensure health never goes below 0
+            window.gameState.health = Math.max(0, window.gameState.health);
+            
             let healthDisplay = `Health: ${window.gameState.health}`;
             if (window.gameState.isInvincible) {
                 healthDisplay += ` | Shield: ${window.gameState.shieldHealth || 100}`;
@@ -608,6 +619,15 @@ export function updateHealth() {
                 healthText.style.color = '#ffff00'; // Yellow
             } else {
                 healthText.style.color = '#ff0000'; // Red
+            }
+
+            // Check for game over
+            if (window.gameState.health <= 0 && !window.gameState.isGameOver) {
+                console.log('Health reached 0 - Game Over');
+                window.gameState.isGameOver = true;
+                if (window.gameState.scene) {
+                    showGameOver(window.gameState.scene);
+                }
             }
         } else {
             console.warn('Could not update health display: healthText or gameState is missing');
