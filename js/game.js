@@ -241,7 +241,13 @@ export function spawnPowerUp(scene) {
         if (powerUpConfig.useEvaSprite) {
             // Create Eva sprite for health power-up
             powerUp = scene.add.sprite(x, y, 'eva');
-            powerUp.setDisplaySize(64, 64);
+            
+            // Make Eva even larger for better visibility
+            if (isMobile) {
+                powerUp.setDisplaySize(192, 192); // 50% larger (was 128)
+            } else {
+                powerUp.setDisplaySize(128, 128); // 33% larger (was 96)
+            }
         } else {
             // Create a rectangle with a glowing effect for other power-ups
             powerUp = scene.add.rectangle(x, y, 48, 48, powerUpConfig.color);

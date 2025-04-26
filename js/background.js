@@ -3,6 +3,9 @@ export class BackgroundManager {
         this.scene = scene;
         this.layers = [];
         this.scrollSpeed = -1;
+        // Get actual game height from scene config
+        this.gameHeight = scene.scale.height;
+        console.log('Background manager created with game height:', this.gameHeight);
     }
 
     createLayers(layerKeys) {
@@ -18,9 +21,9 @@ export class BackgroundManager {
             for (let i = 0; i < 2; i++) {
                 const layer = this.scene.add.tileSprite(
                     0,                          // x position
-                    i === 0 ? 0 : -800,        // y position (second instance starts above)
-                    600,                        // width
-                    800,                        // height
+                    i === 0 ? 0 : -this.gameHeight,  // y position (second instance starts above)
+                    this.scene.scale.width,     // width - use actual game width
+                    this.gameHeight,            // height - use actual game height
                     key                         // texture key
                 );
                 
@@ -56,12 +59,13 @@ export class BackgroundManager {
             layer2.y += this.scrollSpeed;
             
             // Reset positions when a layer moves completely off screen
-            if (layer1.y >= 800) {
-                layer1.y = layer2.y - 800;
+            // Use the actual game height for checking and repositioning
+            if (layer1.y >= this.gameHeight) {
+                layer1.y = layer2.y - this.gameHeight;
                 console.log(`Reset layer ${i} position to ${layer1.y}`);
             }
-            if (layer2.y >= 800) {
-                layer2.y = layer1.y - 800;
+            if (layer2.y >= this.gameHeight) {
+                layer2.y = layer1.y - this.gameHeight;
                 console.log(`Reset layer ${i + 1} position to ${layer2.y}`);
             }
         }

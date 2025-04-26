@@ -668,7 +668,14 @@ export function startLevel(scene, level) {
         delay: 800, // Increased from 400 to 800 (50% slower spawn rate)
         callback: () => {
             if (!window.gameState.isGameOver) {
-                const spawnCount = 1 + Math.floor(level / 2); // Reduced from 2 + to 1 + (50% fewer enemies)
+                // Increase spawn count on mobile
+                let spawnCount;
+                if (isMobile) {
+                    spawnCount = 2 + Math.floor(level / 2); // More enemies on mobile
+                } else {
+                    spawnCount = 1 + Math.floor(level / 2); // Fewer on desktop
+                }
+                
                 for (let i = 0; i < spawnCount; i++) {
                     spawnEnemy(scene);
                 }
