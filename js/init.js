@@ -108,9 +108,20 @@ class GameScene extends Phaser.Scene {
         // Handle player movement
         handlePlayerMovement(this);
         
-        // Handle shooting
-        if (Phaser.Input.Keyboard.JustDown(fireButton)) {
-            fireBullet(this);
+        // Handle continuous firing
+        if (isMobile) {
+            if (this.isFiring) {
+                const time = this.time.now;
+                if (time > this.lastFired) {
+                    fireBullet(this);
+                    this.lastFired = time + this.fireRate;
+                }
+            }
+        } else {
+            // Handle keyboard firing
+            if (Phaser.Input.Keyboard.JustDown(fireButton)) {
+                fireBullet(this);
+            }
         }
         
         // Update enemies
@@ -127,11 +138,12 @@ const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
     scale: {
-        mode: Phaser.Scale.RESIZE,
-        width: '100%',
-        height: '100%',
+        mode: Phaser.Scale.FIT,
+        width: 400,  // Lower base resolution
+        height: 600, // Lower base resolution
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        autoRound: true
+        autoRound: true,
+        expandParent: true
     },
     physics: {
         default: 'arcade',
@@ -158,25 +170,25 @@ function setupMobileControls(scene) {
     const gameWidth = scene.scale.width;
     const gameHeight = scene.scale.height;
     const safeArea = {
-        left: Math.max(20, gameWidth * 0.1),
-        right: Math.min(gameWidth - 20, gameWidth * 0.9),
-        bottom: Math.min(gameHeight - 20, gameHeight * 0.9)
+        left: Math.max(20, gameWidth * 0.15),
+        right: Math.min(gameWidth - 20, gameWidth * 0.85),
+        bottom: Math.min(gameHeight - 20, gameHeight * 0.85)
     };
 
-    // Create virtual joystick with relative positioning
+    // Create virtual joystick with larger size
     const joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
         x: safeArea.left,
-        y: safeArea.bottom - 50,
-        radius: Math.min(50, gameWidth * 0.1),
-        base: scene.add.circle(0, 0, Math.min(50, gameWidth * 0.1), 0x888888, 0.5),
-        thumb: scene.add.circle(0, 0, Math.min(25, gameWidth * 0.05), 0xcccccc, 0.8),
+        y: safeArea.bottom - 80,
+        radius: Math.min(80, gameWidth * 0.15),
+        base: scene.add.circle(0, 0, Math.min(80, gameWidth * 0.15), 0x888888, 0.5),
+        thumb: scene.add.circle(0, 0, Math.min(40, gameWidth * 0.075), 0xcccccc, 0.8),
     });
 
-    // Create fire button with relative positioning
+    // Create larger fire button
     const fireButton = scene.add.circle(
-        safeArea.right - 50,
-        safeArea.bottom - 50,
-        Math.min(40, gameWidth * 0.08),
+        safeArea.right - 80,
+        safeArea.bottom - 80,
+        Math.min(60, gameWidth * 0.12),
         0xff0000,
         0.5
     );
@@ -185,22 +197,28 @@ function setupMobileControls(scene) {
     fireButton.setInteractive()
         .on('pointerdown', () => {
             fireButton.setAlpha(0.8);
+            // Start continuous firing
+            scene.isFiring = true;
             fireBullet(scene);
         })
         .on('pointerup', () => {
             fireButton.setAlpha(0.5);
+            // Stop continuous firing
+            scene.isFiring = false;
         })
         .on('pointerout', () => {
             fireButton.setAlpha(0.5);
+            // Stop continuous firing
+            scene.isFiring = false;
         });
 
     // Add fire button label
     const fireText = scene.add.text(
-        safeArea.right - 50,
-        safeArea.bottom - 50,
+        safeArea.right - 80,
+        safeArea.bottom - 80,
         'FIRE',
         {
-            fontSize: '14px',
+            fontSize: '20px',
             color: '#ffffff',
             align: 'center'
         }
@@ -210,23 +228,26 @@ function setupMobileControls(scene) {
     scene.joystick = joystick;
     scene.mobileFireButton = fireButton;
     scene.mobileFireText = fireText;
+    scene.isFiring = false;
+    scene.lastFired = 0;
+    scene.fireRate = 200; // Time between shots in milliseconds
 
     // Handle resize events
     scene.scale.on('resize', (gameSize) => {
         const width = gameSize.width;
         const height = gameSize.height;
         const newSafeArea = {
-            left: Math.max(20, width * 0.1),
-            right: Math.min(width - 20, width * 0.9),
-            bottom: Math.min(height - 20, height * 0.9)
+            left: Math.max(20, width * 0.15),
+            right: Math.min(width - 20, width * 0.85),
+            bottom: Math.min(height - 20, height * 0.85)
         };
 
         // Update joystick position
-        joystick.setPosition(newSafeArea.left, newSafeArea.bottom - 50);
+        joystick.setPosition(newSafeArea.left, newSafeArea.bottom - 80);
         
         // Update fire button position
-        fireButton.setPosition(newSafeArea.right - 50, newSafeArea.bottom - 50);
-        fireText.setPosition(newSafeArea.right - 50, newSafeArea.bottom - 50);
+        fireButton.setPosition(newSafeArea.right - 80, newSafeArea.bottom - 80);
+        fireText.setPosition(newSafeArea.right - 80, newSafeArea.bottom - 80);
     });
 }
 
@@ -240,7 +261,7 @@ function handlePlayerMovement(scene) {
         if (force > 0) {
             // Convert angle to radians and calculate velocity components
             const rad = Phaser.Math.DegToRad(angle);
-            const normalizedForce = Phaser.Math.Clamp(force / 40, 0, 1);
+            const normalizedForce = Phaser.Math.Clamp(force / 80, 0, 1); // Adjusted for larger joystick
             player.body.setVelocity(
                 Math.cos(rad) * speed * normalizedForce,
                 Math.sin(rad) * speed * normalizedForce
