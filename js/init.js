@@ -125,14 +125,13 @@ class GameScene extends Phaser.Scene {
 // Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
     parent: 'game-container',
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.RESIZE,
+        width: '100%',
+        height: '100%',
         autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: 800,
-        height: 600
+        autoRound: true
     },
     physics: {
         default: 'arcade',
@@ -156,31 +155,79 @@ export const game = new Phaser.Game(config);
 
 // Helper functions
 function setupMobileControls(scene) {
-    // Create virtual joystick
+    const gameWidth = scene.scale.width;
+    const gameHeight = scene.scale.height;
+    const safeArea = {
+        left: Math.max(20, gameWidth * 0.1),
+        right: Math.min(gameWidth - 20, gameWidth * 0.9),
+        bottom: Math.min(gameHeight - 20, gameHeight * 0.9)
+    };
+
+    // Create virtual joystick with relative positioning
     const joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
-        x: 100,
-        y: scene.cameras.main.height - 100,
-        radius: 40,
-        base: scene.add.circle(0, 0, 40, 0x888888, 0.5),
-        thumb: scene.add.circle(0, 0, 20, 0xcccccc, 0.8),
+        x: safeArea.left,
+        y: safeArea.bottom - 50,
+        radius: Math.min(50, gameWidth * 0.1),
+        base: scene.add.circle(0, 0, Math.min(50, gameWidth * 0.1), 0x888888, 0.5),
+        thumb: scene.add.circle(0, 0, Math.min(25, gameWidth * 0.05), 0xcccccc, 0.8),
     });
 
-    // Create fire button
+    // Create fire button with relative positioning
     const fireButton = scene.add.circle(
-        scene.cameras.main.width - 80,
-        scene.cameras.main.height - 80,
-        40,
+        safeArea.right - 50,
+        safeArea.bottom - 50,
+        Math.min(40, gameWidth * 0.08),
         0xff0000,
         0.5
     );
-    fireButton.setInteractive();
-    fireButton.on('pointerdown', () => {
-        fireBullet(scene);
-    });
+    
+    // Add visual feedback for the fire button
+    fireButton.setInteractive()
+        .on('pointerdown', () => {
+            fireButton.setAlpha(0.8);
+            fireBullet(scene);
+        })
+        .on('pointerup', () => {
+            fireButton.setAlpha(0.5);
+        })
+        .on('pointerout', () => {
+            fireButton.setAlpha(0.5);
+        });
+
+    // Add fire button label
+    const fireText = scene.add.text(
+        safeArea.right - 50,
+        safeArea.bottom - 50,
+        'FIRE',
+        {
+            fontSize: '14px',
+            color: '#ffffff',
+            align: 'center'
+        }
+    ).setOrigin(0.5);
 
     // Store references
     scene.joystick = joystick;
     scene.mobileFireButton = fireButton;
+    scene.mobileFireText = fireText;
+
+    // Handle resize events
+    scene.scale.on('resize', (gameSize) => {
+        const width = gameSize.width;
+        const height = gameSize.height;
+        const newSafeArea = {
+            left: Math.max(20, width * 0.1),
+            right: Math.min(width - 20, width * 0.9),
+            bottom: Math.min(height - 20, height * 0.9)
+        };
+
+        // Update joystick position
+        joystick.setPosition(newSafeArea.left, newSafeArea.bottom - 50);
+        
+        // Update fire button position
+        fireButton.setPosition(newSafeArea.right - 50, newSafeArea.bottom - 50);
+        fireText.setPosition(newSafeArea.right - 50, newSafeArea.bottom - 50);
+    });
 }
 
 function handlePlayerMovement(scene) {
