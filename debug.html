@@ -95,9 +95,6 @@
             warn: console.warn
         };
 
-        // Set to track circular references
-        const seen = new WeakSet();
-
         // Get debug output element
         const debugOutput = document.getElementById('debug-output');
 
@@ -119,28 +116,25 @@
 
         function appendToDebug(type, args, color = '#0f0') {
             const message = Array.from(args).map(arg => {
-                if (typeof arg === 'object') {
+                if (typeof arg === 'object' && arg !== null) {
                     try {
-                        // Try to stringify with a replacer function to handle circular references
-                        return JSON.stringify(arg, (key, value) => {
-                            // Skip circular references
+                        // Use a simpler approach to handle circular references
+                        const cache = new Set();
+                        const stringified = JSON.stringify(arg, (key, value) => {
                             if (typeof value === 'object' && value !== null) {
-                                if (seen.has(value)) {
+                                if (cache.has(value)) {
                                     return '[Circular]';
                                 }
-                                seen.add(value);
+                                cache.add(value);
                             }
                             return value;
-                        });
+                        }, 2);
+                        return stringified;
                     } catch (e) {
-                        // If stringification fails, return a simple representation
                         return `[Object: ${arg.constructor ? arg.constructor.name : 'Unknown'}]`;
-                    } finally {
-                        // Clear the seen set for the next object
-                        seen.clear();
                     }
                 }
-                return arg;
+                return String(arg);
             }).join(' ');
             
             const div = document.createElement('div');
@@ -183,6 +177,7 @@
 
         function loadGameScripts() {
             const scripts = [
+                'js/init.js',  // Add init.js first
                 'js/levels.js',
                 'js/quiz.js',
                 'js/sound.js',
@@ -190,14 +185,28 @@
                 'js/game.js'
             ];
 
-            scripts.forEach(src => {
+            // Load scripts sequentially
+            function loadScript(index) {
+                if (index >= scripts.length) {
+                    console.log('All game scripts loaded');
+                    return;
+                }
+
                 const script = document.createElement('script');
-                script.src = src;
+                script.src = scripts[index];
                 script.type = 'module';
-                script.onload = () => console.log(`Loaded ${src}`);
-                script.onerror = () => console.error(`Failed to load ${src}`);
+                script.onload = () => {
+                    console.log(`Loaded ${scripts[index]}`);
+                    loadScript(index + 1);
+                };
+                script.onerror = () => {
+                    console.error(`Failed to load ${scripts[index]}`);
+                    loadScript(index + 1);
+                };
                 document.head.appendChild(script);
-            });
+            }
+
+            loadScript(0);
         }
     </script>
 </body>

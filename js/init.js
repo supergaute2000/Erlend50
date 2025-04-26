@@ -48,18 +48,68 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
-        // We'll use basic shapes instead of images for now
-        // The actual images will be loaded later
+        // Load the avatar image with error handling
+        this.load.image('avatar', `assets/images/avatar.png?t=${new Date().getTime()}`);
+        
+        // Add loading error handler
+        this.load.on('loaderror', (fileObj) => {
+            console.error('Error loading asset:', fileObj.key, fileObj);
+            if (fileObj.key === 'avatar') {
+                console.log('Avatar failed to load, using fallback rectangle');
+            }
+        });
+
+        // Add load complete handler
+        this.load.on('complete', () => {
+            console.log('All assets loaded successfully');
+            const texture = this.textures.get('avatar');
+            console.log('Avatar texture details:', {
+                exists: this.textures.exists('avatar'),
+                key: texture.key,
+                width: texture.width,
+                height: texture.height
+            });
+        });
+
+        // Add file load success handler
+        this.load.on('filecomplete-image-avatar', (key, type, data) => {
+            console.log('Avatar loaded successfully:', {
+                key: key,
+                type: type,
+                data: data
+            });
+        });
     }
 
     create() {
+        console.log('Create function started');
+        
         // Initialize game objects
         bullets = this.add.group();
         enemies = this.add.group();
         powerUps = this.add.group();
         
-        // Create player using a rectangle
-        player = this.add.rectangle(200, 500, 32, 32, 0x00ff00);
+        // Create player using the avatar sprite with fallback
+        try {
+            if (this.textures.exists('avatar')) {
+                console.log('Creating player sprite with avatar texture');
+                player = this.add.sprite(200, 500, 'avatar');
+                player.setDisplaySize(128, 128); // Set size to 128x128 (4x larger than original 32x32)
+                console.log('Player sprite created with dimensions:', {
+                    width: player.width,
+                    height: player.height,
+                    displayWidth: player.displayWidth,
+                    displayHeight: player.displayHeight
+                });
+            } else {
+                console.log('Avatar texture not found, using fallback rectangle');
+                player = this.add.rectangle(200, 500, 128, 128, 0x00ff00);
+            }
+        } catch (error) {
+            console.error('Error creating player sprite:', error);
+            player = this.add.rectangle(200, 500, 128, 128, 0x00ff00);
+        }
+        
         this.physics.add.existing(player);
         player.body.setCollideWorldBounds(true);
         
