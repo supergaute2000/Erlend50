@@ -97,13 +97,24 @@ export function spawnEnemy(scene) {
     // Add physics to enemy
     scene.physics.add.existing(enemy);
     
-    // Set enemy properties
+    // Set enemy properties with increased base speed
     enemy.health = enemyConfig.health || 10;
-    enemy.speed = enemyConfig.speed || 100;
+    const baseSpeed = 150; // Increased base speed (was 100)
+    const levelSpeedIncrease = window.gameState.currentLevel * 20; // Speed increases with level
+    enemy.speed = (enemyConfig.speed || baseSpeed) + levelSpeedIncrease;
     enemy.points = enemyConfig.points || 10;
     
-    // Make enemy move towards player
-    scene.physics.moveToObject(enemy, player, enemy.speed);
+    // Add slight random variation to enemy speed
+    const speedVariation = Phaser.Math.Between(-20, 20);
+    enemy.speed += speedVariation;
+    
+    // Make enemy move towards player with some randomization
+    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
+    const randomAngle = angle + Phaser.Math.FloatBetween(-0.2, 0.2); // Add slight random direction
+    enemy.body.setVelocity(
+        Math.cos(randomAngle) * enemy.speed,
+        Math.sin(randomAngle) * enemy.speed
+    );
 }
 
 // Spawn a power-up
@@ -120,7 +131,7 @@ export function spawnPowerUp(scene) {
         { type: 'shield', color: 0x00ff00 },
         { type: 'doubleShot', color: 0xff00ff },
         { type: 'speedBoost', color: 0xffff00 },
-        { type: 'health', color: 0xff0000 }
+        { type: 'health', color: 0xff0000, useEvaSprite: true }
     ];
     
     // Randomly select a power-up type
@@ -131,7 +142,14 @@ export function spawnPowerUp(scene) {
     
     let powerUp;
     try {
-        powerUp = scene.add.rectangle(x, y, 30, 30, powerUpConfig.color);
+        if (powerUpConfig.useEvaSprite) {
+            // Create Eva sprite for health power-up
+            powerUp = scene.add.sprite(x, y, 'eva');
+            powerUp.setDisplaySize(128, 128); // Set size to 128x128 (4x larger than original)
+        } else {
+            // Create rectangle for other power-ups
+            powerUp = scene.add.rectangle(x, y, 30, 30, powerUpConfig.color);
+        }
         
         if (powerUp) {
             scene.physics.add.existing(powerUp);
@@ -157,6 +175,18 @@ export function spawnPowerUp(scene) {
                     powerUp.destroy();
                 }
             });
+            
+            // Add floating animation for Eva sprite
+            if (powerUpConfig.useEvaSprite) {
+                scene.tweens.add({
+                    targets: powerUp,
+                    y: y + 10,
+                    duration: 1000,
+                    yoyo: true,
+                    repeat: -1,
+                    ease: 'Sine.easeInOut'
+                });
+            }
             
             console.log(`Successfully spawned ${powerUpConfig.type} power-up at (${x}, ${y})`);
         }

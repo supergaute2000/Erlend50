@@ -50,6 +50,8 @@ class GameScene extends Phaser.Scene {
     preload() {
         // Load the avatar image with error handling
         this.load.image('avatar', `assets/images/avatar.png?t=${new Date().getTime()}`);
+        // Load Eva's image for health power-up
+        this.load.image('eva', `assets/images/eva.png?t=${new Date().getTime()}`);
         
         // Add loading error handler
         this.load.on('loaderror', (fileObj) => {
@@ -158,14 +160,12 @@ class GameScene extends Phaser.Scene {
         // Handle player movement
         handlePlayerMovement(this);
         
-        // Handle continuous firing
+        // Auto-fire on mobile
         if (isMobile) {
-            if (this.isFiring) {
-                const time = this.time.now;
-                if (time > this.lastFired) {
-                    fireBullet(this);
-                    this.lastFired = time + this.fireRate;
-                }
+            const time = this.time.now;
+            if (time > lastFired) {
+                fireBullet(this);
+                lastFired = time + 150; // Faster fire rate (was 200)
             }
         } else {
             // Handle keyboard firing
@@ -575,24 +575,25 @@ export function startLevel(scene, level) {
         levelText.setVisible(false);
     });
     
-    // DEBUG MODE: Continuously spawn enemies
-    console.log('DEBUG MODE: Continuous enemy spawning enabled');
-    
-    // Spawn enemies every 2 seconds
+    // Spawn enemies more frequently
     scene.time.addEvent({
-        delay: 2000,
+        delay: 800, // Spawn every 0.8 seconds (was 2000)
         callback: () => {
             if (!window.gameState.isGameOver) {
-                spawnEnemy(scene);
-                console.log('DEBUG: Enemy spawned');
+                // Spawn multiple enemies at once
+                const spawnCount = 1 + Math.floor(level / 2); // More enemies in higher levels
+                for (let i = 0; i < spawnCount; i++) {
+                    spawnEnemy(scene);
+                }
+                console.log(`DEBUG: Spawned ${spawnCount} enemies`);
             }
         },
         loop: true
     });
     
-    // Spawn power-ups every 10 seconds
+    // Spawn power-ups slightly more frequently
     scene.time.addEvent({
-        delay: 10000,
+        delay: 8000, // Every 8 seconds (was 10000)
         callback: () => {
             if (!window.gameState.isGameOver) {
                 spawnPowerUp(scene);
@@ -601,9 +602,6 @@ export function startLevel(scene, level) {
         },
         loop: true
     });
-    
-    // Skip playing music for now
-    // soundManager.playMusic(level);
 }
 
 // Update enemies
