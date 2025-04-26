@@ -139,8 +139,8 @@ const config = {
     parent: 'game-container',
     scale: {
         mode: Phaser.Scale.FIT,
-        width: 400,  // Lower base resolution
-        height: 600, // Lower base resolution
+        width: 400,
+        height: 600,
         autoCenter: Phaser.Scale.CENTER_BOTH,
         autoRound: true,
         expandParent: true
@@ -152,13 +152,6 @@ const config = {
             debug: false
         }
     },
-    plugins: {
-        global: [{
-            key: 'rexVirtualJoystick',
-            plugin: rexvirtualjoystickplugin,
-            start: true
-        }]
-    },
     scene: GameScene
 };
 
@@ -167,109 +160,70 @@ export const game = new Phaser.Game(config);
 
 // Helper functions
 function setupMobileControls(scene) {
-    const gameWidth = scene.scale.width;
-    const gameHeight = scene.scale.height;
-    const safeArea = {
-        left: Math.max(20, gameWidth * 0.15),
-        right: Math.min(gameWidth - 20, gameWidth * 0.85),
-        bottom: Math.min(gameHeight - 20, gameHeight * 0.85)
-    };
-
-    // Create virtual joystick with larger size
-    const joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
-        x: safeArea.left,
-        y: safeArea.bottom - 80,
-        radius: Math.min(80, gameWidth * 0.15),
-        base: scene.add.circle(0, 0, Math.min(80, gameWidth * 0.15), 0x888888, 0.5),
-        thumb: scene.add.circle(0, 0, Math.min(40, gameWidth * 0.075), 0xcccccc, 0.8),
+    // Make player draggable
+    player.setInteractive({ draggable: true });
+    
+    // Track if we're currently dragging
+    let isDragging = false;
+    let dragPointer = null;
+    
+    // Handle player drag
+    scene.input.on('dragstart', (pointer, gameObject) => {
+        if (gameObject === player) {
+            isDragging = true;
+            dragPointer = pointer;
+        }
     });
 
-    // Create larger fire button
-    const fireButton = scene.add.circle(
-        safeArea.right - 80,
-        safeArea.bottom - 80,
-        Math.min(60, gameWidth * 0.12),
-        0xff0000,
-        0.5
-    );
-    
-    // Add visual feedback for the fire button
-    fireButton.setInteractive()
-        .on('pointerdown', () => {
-            fireButton.setAlpha(0.8);
-            // Start continuous firing
-            scene.isFiring = true;
-            fireBullet(scene);
-        })
-        .on('pointerup', () => {
-            fireButton.setAlpha(0.5);
-            // Stop continuous firing
-            scene.isFiring = false;
-        })
-        .on('pointerout', () => {
-            fireButton.setAlpha(0.5);
-            // Stop continuous firing
-            scene.isFiring = false;
-        });
-
-    // Add fire button label
-    const fireText = scene.add.text(
-        safeArea.right - 80,
-        safeArea.bottom - 80,
-        'FIRE',
-        {
-            fontSize: '20px',
-            color: '#ffffff',
-            align: 'center'
+    scene.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+        if (gameObject === player) {
+            // Keep player within bounds
+            const minX = player.width / 2;
+            const maxX = scene.scale.width - player.width / 2;
+            const minY = player.height / 2;
+            const maxY = scene.scale.height - player.height / 2;
+            
+            player.x = Phaser.Math.Clamp(dragX, minX, maxX);
+            player.y = Phaser.Math.Clamp(dragY, minY, maxY);
         }
-    ).setOrigin(0.5);
+    });
 
-    // Store references
-    scene.joystick = joystick;
-    scene.mobileFireButton = fireButton;
-    scene.mobileFireText = fireText;
+    scene.input.on('dragend', (pointer, gameObject) => {
+        if (gameObject === player) {
+            isDragging = false;
+            dragPointer = null;
+            // Stop player movement when drag ends
+            player.body.setVelocity(0, 0);
+        }
+    });
+
+    // Handle touch for firing
+    scene.input.on('pointerdown', (pointer) => {
+        // If this is not the dragging pointer, fire
+        if (!isDragging || pointer !== dragPointer) {
+            fireBullet(scene);
+            scene.isFiring = true;
+        }
+    });
+
+    scene.input.on('pointerup', (pointer) => {
+        // If this was not the dragging pointer, stop firing
+        if (!isDragging || pointer !== dragPointer) {
+            scene.isFiring = false;
+        }
+    });
+
+    // Store firing state
     scene.isFiring = false;
     scene.lastFired = 0;
     scene.fireRate = 200; // Time between shots in milliseconds
-
-    // Handle resize events
-    scene.scale.on('resize', (gameSize) => {
-        const width = gameSize.width;
-        const height = gameSize.height;
-        const newSafeArea = {
-            left: Math.max(20, width * 0.15),
-            right: Math.min(width - 20, width * 0.85),
-            bottom: Math.min(height - 20, height * 0.85)
-        };
-
-        // Update joystick position
-        joystick.setPosition(newSafeArea.left, newSafeArea.bottom - 80);
-        
-        // Update fire button position
-        fireButton.setPosition(newSafeArea.right - 80, newSafeArea.bottom - 80);
-        fireText.setPosition(newSafeArea.right - 80, newSafeArea.bottom - 80);
-    });
 }
 
 function handlePlayerMovement(scene) {
-    const speed = scene.playerSpeed || 200;
-    
-    if (isMobile && scene.joystick) {
-        const force = scene.joystick.force;
-        const angle = scene.joystick.angle;
+    // For non-mobile, keep keyboard controls
+    if (!isMobile) {
+        const speed = scene.playerSpeed || 200;
         
-        if (force > 0) {
-            // Convert angle to radians and calculate velocity components
-            const rad = Phaser.Math.DegToRad(angle);
-            const normalizedForce = Phaser.Math.Clamp(force / 80, 0, 1); // Adjusted for larger joystick
-            player.body.setVelocity(
-                Math.cos(rad) * speed * normalizedForce,
-                Math.sin(rad) * speed * normalizedForce
-            );
-        } else {
-            player.body.setVelocity(0, 0);
-        }
-    } else {
         if (cursors.left.isDown) {
             player.body.setVelocityX(-speed);
         } else if (cursors.right.isDown) {
