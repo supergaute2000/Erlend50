@@ -95,7 +95,7 @@ export function spawnEnemy(scene) {
     let x, y;
     
     // Enemy size adjusted to match player size
-    const enemySize = 96; // Slightly smaller than player for better collision
+    const enemySize = 128; // Increased from 96 to 128 for better hit detection
     
     switch(side) {
         case 0: // top
@@ -116,21 +116,68 @@ export function spawnEnemy(scene) {
     
     // Create enemy sprite using chips.gif
     const enemy = scene.add.sprite(x, y, 'chips');
+    
+    // Set the display size first
     enemy.setDisplaySize(enemySize, enemySize);
+    enemy.setOrigin(0.5, 0.5);
     
     // Set depth to ensure enemy appears above background
     enemy.setDepth(10);
     
-    // Add physics to enemy
+    // Add physics to enemy AFTER setting display size
     scene.physics.add.existing(enemy);
     
-    // Set a smaller collision body for more precise collisions
-    enemy.body.setSize(enemySize * 0.8, enemySize * 0.8);
-    enemy.body.setOffset(enemySize * 0.1, enemySize * 0.1);
+    // Make collision box MUCH LARGER (3.5x) for easier hitting
+    const collisionSize = enemySize * 3.5;
+    
+    // Set the large size
+    enemy.body.setSize(collisionSize, collisionSize);
+    
+    // EXTREME SHIFT: Moving hitboxes way down and right
+    // Use negative values to move right and down relative to sprite center
+    
+    // Calculate how much the box extends beyond the sprite (on each side)
+    const extraSize = (collisionSize - enemySize) / 2;
+    
+    // This would center the hitbox perfectly on the sprite:
+    // enemy.body.offset.set(-extraSize, -extraSize);
+    
+    // EXTREME shift - 200% right and 150% down 
+    // (this places the hitbox far to the right and below the sprite)
+    const rightShift = extraSize * 2.0;   // Increased from 1.25 to 2.0
+    const downShift = extraSize * 1.5;    // Increased from 1.0 to 1.5
+    
+    // Final offset: less negative means shifted right/down
+    enemy.body.offset.set(-extraSize + rightShift, -extraSize + downShift);
+    
+    // Fixed offset adjustment in pixels (additional fine-tuning)
+    // This adds a fixed pixel offset in addition to the percentage-based offset
+    enemy.body.offset.x += 30; // Push 30 more pixels right
+    enemy.body.offset.y += 20; // Push 20 more pixels down
+    
+    // Force-set the body position to match the sprite
+    enemy.body.reset(x, y);
     
     // Don't collide with world bounds - we'll handle cleanup ourselves
     enemy.body.setCollideWorldBounds(false);
     
+    // Enable debug to show the body
+    enemy.body.debugShowBody = true;
+    enemy.body.debugBodyColor = 0xff00ff;
+    
+    // Log the final hitbox position for debugging
+    console.log('Enemy hitbox:', {
+        spriteX: enemy.x,
+        spriteY: enemy.y,
+        boxX: enemy.body.x,
+        boxY: enemy.body.y,
+        boxWidth: enemy.body.width,
+        boxHeight: enemy.body.height,
+        offsetX: enemy.body.offset.x,
+        offsetY: enemy.body.offset.y
+    });
+    
+    // Store enemy properties
     enemy.health = enemyConfig.health || 10;
     enemy.speed = enemyConfig.speed || 300;
     enemy.points = enemyConfig.points || 10;

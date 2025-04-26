@@ -148,6 +148,11 @@ class GameScene extends Phaser.Scene {
             setupMobileControls(this);
         }
         
+        // Setup physics colliders with proper context binding
+        this.physics.add.overlap(bullets, enemies, bulletHitEnemy, null, this);
+        this.physics.add.overlap(player, enemies, (player, enemy) => playerHitEnemy(player, enemy, this), null, this);
+        this.physics.add.overlap(player, powerUps, collectPowerUp, null, this);
+        
         // Initialize game state in window object for global access
         window.gameState = {
             health: health,
@@ -158,11 +163,6 @@ class GameScene extends Phaser.Scene {
             scene: this,
             shootingCooldown: 150 // Reduced from 250 to 150 for faster shooting
         };
-        
-        // Setup collisions
-        this.physics.add.overlap(player, enemies, (player, enemy) => playerHitEnemy(player, enemy, this), null, this);
-        this.physics.add.collider(bullets, enemies, bulletHitEnemy, null, this);
-        this.physics.add.collider(player, powerUps, collectPowerUp, null, this);
         
         // Create level text
         levelText = this.add.text(200, 300, '', {
@@ -204,10 +204,6 @@ class GameScene extends Phaser.Scene {
         
         // Update enemies
         updateEnemies(this);
-        
-        // Check for collisions
-        this.physics.overlap(bullets, enemies, bulletHitEnemy, null, this);
-        this.physics.overlap(player, powerUps, collectPowerUp, null, this);
     }
 }
 
@@ -227,7 +223,7 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 },
-            debug: false
+            debug: true // Enable debug visualization
         }
     },
     scene: GameScene
@@ -338,33 +334,69 @@ function handlePlayerMovement(scene) {
 }
 
 function fireBullet(scene) {
+    const bulletSize = 24; // Return to smaller size as requested
     // Check if double shot is active
     if (scene.isDoubleShot) {
         // Create two bullets side by side
         const bulletSpacing = 20; // Space between bullets
         
         // Left bullet
-        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, 16, 24, 0xffff00);
-        bullets.add(bullet1);
-        scene.physics.add.existing(bullet1);
-        bullet1.body.setSize(16, 24); // Match visual size
-        bullet1.body.setVelocityY(-400);
+        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, bulletSize, bulletSize, 0xffff00);
+        bullet1.setOrigin(0.5, 0.5); // Center origin explicitly
         
-        // Right bullet
-        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, 16, 24, 0xffff00);
-        bullets.add(bullet2);
+        // Add physics AFTER setting display properties
+        scene.physics.add.existing(bullet1);
+        
+        // Set the physics body to exactly match the rectangle
+        bullet1.body.setSize(bulletSize, bulletSize, true);
+        bullet1.body.setOffset(0, 0);
+        
+        // Make sure body position is correct
+        bullet1.body.reset(player.x - bulletSpacing/2, player.y);
+        
+        // Set movement
+        bullet1.body.setVelocityY(-400);
+        bullet1.body.setBounce(0);
+        bullet1.body.setCollideWorldBounds(false);
+        
+        // Add to group
+        bullets.add(bullet1);
+        
+        // Right bullet - same pattern
+        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, bulletSize, bulletSize, 0xffff00);
+        bullet2.setOrigin(0.5, 0.5);
         scene.physics.add.existing(bullet2);
-        bullet2.body.setSize(16, 24); // Match visual size
+        bullet2.body.setSize(bulletSize, bulletSize, true);
+        bullet2.body.setOffset(0, 0);
+        bullet2.body.reset(player.x + bulletSpacing/2, player.y);
         bullet2.body.setVelocityY(-400);
+        bullet2.body.setBounce(0);
+        bullet2.body.setCollideWorldBounds(false);
+        bullets.add(bullet2);
         
         console.log('Double shot fired!');
     } else {
         // Create a single bullet
-        const bullet = scene.add.rectangle(player.x, player.y, 16, 24, 0xffff00);
-        bullets.add(bullet);
+        const bullet = scene.add.rectangle(player.x, player.y, bulletSize, bulletSize, 0xffff00);
+        bullet.setOrigin(0.5, 0.5);
+        
+        // Add physics AFTER setting display properties
         scene.physics.add.existing(bullet);
-        bullet.body.setSize(16, 24); // Match visual size
+        
+        // Set the physics body to exactly match the rectangle
+        bullet.body.setSize(bulletSize, bulletSize, true);
+        bullet.body.setOffset(0, 0);
+        
+        // Make sure body position is correct
+        bullet.body.reset(player.x, player.y);
+        
+        // Set movement
         bullet.body.setVelocityY(-400);
+        bullet.body.setBounce(0);
+        bullet.body.setCollideWorldBounds(false);
+        
+        // Add to group
+        bullets.add(bullet);
     }
     
     // Skip playing sound for now
@@ -378,12 +410,15 @@ function bulletHitEnemy(bullet, enemy) {
         enemyPos: { x: enemy.x, y: enemy.y }
     });
     
+    // Store scene reference before destroying bullet
+    const scene = bullet.scene;
+    
     bullet.destroy();
     enemy.health -= 10;
     
     // Visual feedback
-    const hitEffect = bullet.scene.add.circle(enemy.x, enemy.y, 20, 0xffff00, 0.5);
-    bullet.scene.tweens.add({
+    const hitEffect = scene.add.circle(enemy.x, enemy.y, 20, 0xffff00, 0.5);
+    scene.tweens.add({
         targets: hitEffect,
         scale: 2,
         alpha: 0,
@@ -630,10 +665,10 @@ export function startLevel(scene, level) {
     
     // Spawn enemies more frequently
     scene.time.addEvent({
-        delay: 400,
+        delay: 800, // Increased from 400 to 800 (50% slower spawn rate)
         callback: () => {
             if (!window.gameState.isGameOver) {
-                const spawnCount = 2 + Math.floor(level / 2);
+                const spawnCount = 1 + Math.floor(level / 2); // Reduced from 2 + to 1 + (50% fewer enemies)
                 for (let i = 0; i < spawnCount; i++) {
                     spawnEnemy(scene);
                 }
