@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Bror 50 - Birthday Game</title>
     <style>
         body {
@@ -14,11 +14,14 @@
             min-height: 100vh;
             background-color: #000;
             font-family: Arial, sans-serif;
+            touch-action: none;
         }
         #game-container {
             position: relative;
-            width: 800px;
-            height: 600px;
+            width: 100%;
+            max-width: 800px;
+            height: 100vh;
+            max-height: 600px;
             border: 2px solid #333;
             overflow: hidden;
         }
@@ -78,17 +81,23 @@
         if (!hasWebGL()) {
             document.getElementById('compatibility-message').style.display = 'block';
         } else {
-            // Load Phaser
-            const script = document.createElement('script');
-            script.src = 'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js';
-            script.onload = function() {
-                // Load game scripts
-                const gameScript = document.createElement('script');
-                gameScript.type = 'module';
-                gameScript.src = 'js/init.js';
-                document.body.appendChild(gameScript);
+            // Load Phaser and Rex plugins
+            const phaserScript = document.createElement('script');
+            phaserScript.src = 'https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.min.js';
+            phaserScript.onload = function() {
+                // Load Rex Virtual Joystick plugin
+                const rexScript = document.createElement('script');
+                rexScript.src = 'https://cdn.jsdelivr.net/npm/phaser3-rex-plugins@1.1.79/dist/rexvirtualjoystickplugin.min.js';
+                rexScript.onload = function() {
+                    // Load game scripts
+                    const gameScript = document.createElement('script');
+                    gameScript.type = 'module';
+                    gameScript.src = 'js/init.js';
+                    document.body.appendChild(gameScript);
+                };
+                document.body.appendChild(rexScript);
             };
-            document.body.appendChild(script);
+            document.body.appendChild(phaserScript);
         }
     </script>
 </body>

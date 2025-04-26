@@ -125,12 +125,14 @@ class GameScene extends Phaser.Scene {
 // Game configuration
 const config = {
     type: Phaser.AUTO,
-    width: 400,
+    width: 800,
     height: 600,
     parent: 'game-container',
     scale: {
         mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 800,
+        height: 600
     },
     physics: {
         default: 'arcade',
@@ -138,6 +140,13 @@ const config = {
             gravity: { y: 0 },
             debug: false
         }
+    },
+    plugins: {
+        global: [{
+            key: 'rexVirtualJoystick',
+            plugin: rexvirtualjoystickplugin,
+            start: true
+        }]
     },
     scene: GameScene
 };
@@ -147,29 +156,48 @@ export const game = new Phaser.Game(config);
 
 // Helper functions
 function setupMobileControls(scene) {
+    // Create virtual joystick
     const joystick = scene.plugins.get('rexVirtualJoystick').add(scene, {
         x: 100,
-        y: 500,
-        radius: 50,
-        base: scene.add.circle(0, 0, 50, 0x888888, 0.5),
-        thumb: scene.add.circle(0, 0, 25, 0xcccccc, 0.8),
+        y: scene.cameras.main.height - 100,
+        radius: 40,
+        base: scene.add.circle(0, 0, 40, 0x888888, 0.5),
+        thumb: scene.add.circle(0, 0, 20, 0xcccccc, 0.8),
     });
-    
-    const fireZone = scene.add.zone(700, 500, 100, 100);
-    fireZone.setInteractive();
-    fireZone.on('pointerdown', () => {
+
+    // Create fire button
+    const fireButton = scene.add.circle(
+        scene.cameras.main.width - 80,
+        scene.cameras.main.height - 80,
+        40,
+        0xff0000,
+        0.5
+    );
+    fireButton.setInteractive();
+    fireButton.on('pointerdown', () => {
         fireBullet(scene);
     });
+
+    // Store references
+    scene.joystick = joystick;
+    scene.mobileFireButton = fireButton;
 }
 
 function handlePlayerMovement(scene) {
-    // Use scene.playerSpeed if available, otherwise default to 200
     const speed = scene.playerSpeed || 200;
     
-    if (isMobile) {
-        const joystick = scene.plugins.get('rexVirtualJoystick');
-        if (joystick.forceX !== 0 || joystick.forceY !== 0) {
-            player.body.setVelocity(joystick.forceX * speed, joystick.forceY * speed);
+    if (isMobile && scene.joystick) {
+        const force = scene.joystick.force;
+        const angle = scene.joystick.angle;
+        
+        if (force > 0) {
+            // Convert angle to radians and calculate velocity components
+            const rad = Phaser.Math.DegToRad(angle);
+            const normalizedForce = Phaser.Math.Clamp(force / 40, 0, 1);
+            player.body.setVelocity(
+                Math.cos(rad) * speed * normalizedForce,
+                Math.sin(rad) * speed * normalizedForce
+            );
         } else {
             player.body.setVelocity(0, 0);
         }
