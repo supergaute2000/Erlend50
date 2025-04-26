@@ -1,7 +1,7 @@
 // Level configurations
 const LEVELS = {
     1: {
-        name: "Childhood & Gaming",
+        name: "Erlend 50 år!",
         background: "skærgård",
         enemies: [
             {

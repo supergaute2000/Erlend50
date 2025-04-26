@@ -12,7 +12,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #000;
+            background-color: transparent;
             font-family: Arial, sans-serif;
             touch-action: none;
             overflow: hidden;
@@ -25,6 +25,7 @@
             max-height: 100%;
             overflow: hidden;
             border: none;
+            background: transparent;
         }
         #score-container {
             position: fixed;
@@ -122,5 +123,7 @@
             document.body.appendChild(phaserScript);
         }
     </script>
+
+    <script type="module" src="js/init.js"></script>
 </body>
 </html> 

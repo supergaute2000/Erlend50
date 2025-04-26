@@ -2,6 +2,7 @@
 import { LEVELS } from './levels.js';
 import { spawnEnemy, spawnPowerUp, playerHitEnemy } from './game.js';
 import { SoundManager } from './sound.js';
+import { BackgroundManager } from './background.js';
 
 // Game variables
 export let player;
@@ -40,6 +41,7 @@ export let levelText;
 export let levelTransition = false;
 export let levelTransitionTimer = 0;
 export let levelTransitionDuration = 3000; // 3 seconds
+export let backgroundManager;
 
 // Game scene class
 class GameScene extends Phaser.Scene {
@@ -48,10 +50,17 @@ class GameScene extends Phaser.Scene {
     }
 
     preload() {
+        // Load background layers
+        this.load.image('layer1', 'assets/images/layer1.png');
+        this.load.image('layer2', 'assets/images/layer2.png');
+        this.load.image('layer3', 'assets/images/layer3.png');
+        
         // Load the avatar image with error handling
         this.load.image('avatar', `assets/images/avatar.png?t=${new Date().getTime()}`);
         // Load Eva's image for health power-up
         this.load.image('eva', `assets/images/eva.png?t=${new Date().getTime()}`);
+        // Load chips.gif as a static image
+        this.load.image('chips', 'assets/images/chips.gif');
         
         // Add loading error handler
         this.load.on('loaderror', (fileObj) => {
@@ -71,6 +80,15 @@ class GameScene extends Phaser.Scene {
                 width: texture.width,
                 height: texture.height
             });
+            
+            // Log chips texture details
+            const chipsTexture = this.textures.get('chips');
+            console.log('Chips texture details:', {
+                exists: this.textures.exists('chips'),
+                key: chipsTexture.key,
+                width: chipsTexture.width,
+                height: chipsTexture.height
+            });
         });
 
         // Add file load success handler
@@ -85,6 +103,9 @@ class GameScene extends Phaser.Scene {
 
     create() {
         console.log('Create function started');
+        
+        // Initialize background manager
+        backgroundManager = new BackgroundManager(this);
         
         // Initialize game objects
         bullets = this.add.group();
@@ -157,6 +178,9 @@ class GameScene extends Phaser.Scene {
     update() {
         if (window.gameState.isGameOver) return;
         
+        // Update background
+        backgroundManager.update();
+        
         // Handle player movement
         handlePlayerMovement(this);
         
@@ -165,7 +189,7 @@ class GameScene extends Phaser.Scene {
             const time = this.time.now;
             if (time > lastFired) {
                 fireBullet(this);
-                lastFired = time + 150; // Faster fire rate (was 200)
+                lastFired = time + 750; // 5x slower fire rate (was 150)
             }
         } else {
             // Handle keyboard firing
@@ -187,10 +211,11 @@ class GameScene extends Phaser.Scene {
 const config = {
     type: Phaser.AUTO,
     parent: 'game-container',
+    transparent: true,
     scale: {
         mode: Phaser.Scale.FIT,
-        width: 400,
-        height: 600,
+        width: 800,  // Match background width
+        height: 800, // Match background height
         autoCenter: Phaser.Scale.CENTER_BOTH,
         autoRound: true,
         expandParent: true
@@ -558,13 +583,10 @@ export function startLevel(scene, level) {
     currentEnemyTypes = LEVELS[level].enemies;
     currentPowerUpTypes = LEVELS[level].powerUps;
     
-    // Set background
+    // Remove old background if it exists
     if (backgroundImage) {
         backgroundImage.destroy();
     }
-    // Create a simple background rectangle instead of using an image
-    backgroundImage = scene.add.rectangle(400, 300, 800, 600, 0x000033);
-    backgroundImage.setDepth(-1); // Place it behind other objects
     
     // Display level text
     levelText.setText(LEVELS[level].name);
@@ -577,11 +599,11 @@ export function startLevel(scene, level) {
     
     // Spawn enemies more frequently
     scene.time.addEvent({
-        delay: 800, // Spawn every 0.8 seconds (was 2000)
+        delay: 400, // Spawn every 0.4 seconds (was 800)
         callback: () => {
             if (!window.gameState.isGameOver) {
                 // Spawn multiple enemies at once
-                const spawnCount = 1 + Math.floor(level / 2); // More enemies in higher levels
+                const spawnCount = 2 + Math.floor(level / 2); // Double the base spawn count
                 for (let i = 0; i < spawnCount; i++) {
                     spawnEnemy(scene);
                 }

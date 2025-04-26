@@ -19,7 +19,7 @@ if (!fs.existsSync(highScoresPath)) {
 }
 
 // Get high scores
-app.get('/api/highscores', (req, res) => {
+app.get('/scores', (req, res) => {
     try {
         const highScores = JSON.parse(fs.readFileSync(highScoresPath, 'utf8'));
         res.json(highScores);
@@ -30,7 +30,7 @@ app.get('/api/highscores', (req, res) => {
 });
 
 // Save high score
-app.post('/api/highscores', (req, res) => {
+app.post('/scores', (req, res) => {
     try {
         const { name, score } = req.body;
         

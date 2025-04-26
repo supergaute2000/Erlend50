@@ -17,6 +17,9 @@ import { SoundManager } from './sound.js';
 // Import UI manager
 import { UIManager } from './ui.js';
 
+// Import high score functions
+import { saveHighScore } from './highscores.js';
+
 // Game state variables
 let currentBoss = null;
 let bossHealth = 0;
@@ -87,34 +90,74 @@ export function spawnEnemy(scene) {
     
     const enemyConfig = levelConfig.enemies[Phaser.Math.Between(0, levelConfig.enemies.length - 1)];
     
-    // Create enemy at a random x position at the top of the screen
-    const x = Phaser.Math.Between(50, 350);
-    const enemy = scene.add.rectangle(x, -20, 32, 32, 0xff0000);
+    // Randomly choose a spawn position (only top and sides, not bottom)
+    const side = Math.floor(Math.random() * 3); // 0: top, 1: right, 2: left
+    let x, y;
     
-    // Add to the enemies group
-    enemies.add(enemy);
+    // Enemy size increased by 1.5x
+    const enemySize = 128; // 1.5x larger than before
+    
+    switch(side) {
+        case 0: // top
+            x = Math.random() * (scene.game.config.width - enemySize) + enemySize/2;
+            y = -enemySize;
+            break;
+        case 1: // right
+            x = scene.game.config.width + enemySize;
+            y = Math.random() * (scene.game.config.height/2); // Only top half
+            break;
+        case 2: // left
+            x = -enemySize;
+            y = Math.random() * (scene.game.config.height/2); // Only top half
+            break;
+    }
+    
+    console.log('Spawning enemy at:', x, y);
+    
+    // Create enemy sprite using chips.gif
+    const enemy = scene.add.sprite(x, y, 'chips');
+    enemy.setDisplaySize(enemySize, enemySize);
+    
+    // Set depth to ensure enemy appears above background
+    enemy.setDepth(10);
     
     // Add physics to enemy
     scene.physics.add.existing(enemy);
     
-    // Set enemy properties with increased base speed
+    // Don't collide with world bounds - we'll handle cleanup ourselves
+    enemy.body.setCollideWorldBounds(false);
+    
     enemy.health = enemyConfig.health || 10;
-    const baseSpeed = 150; // Increased base speed (was 100)
-    const levelSpeedIncrease = window.gameState.currentLevel * 20; // Speed increases with level
-    enemy.speed = (enemyConfig.speed || baseSpeed) + levelSpeedIncrease;
+    enemy.speed = enemyConfig.speed || 300;
     enemy.points = enemyConfig.points || 10;
     
-    // Add slight random variation to enemy speed
-    const speedVariation = Phaser.Math.Between(-20, 20);
-    enemy.speed += speedVariation;
-    
-    // Make enemy move towards player with some randomization
-    const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-    const randomAngle = angle + Phaser.Math.FloatBetween(-0.2, 0.2); // Add slight random direction
+    // Calculate direction to player but only use for velocity, not rotation
+    const angle = Phaser.Math.Angle.Between(x, y, player.x, player.y);
     enemy.body.setVelocity(
-        Math.cos(randomAngle) * enemy.speed,
-        Math.sin(randomAngle) * enemy.speed
+        Math.cos(angle) * enemy.speed,
+        Math.sin(angle) * enemy.speed
     );
+    
+    // Add to the enemies group
+    enemies.add(enemy);
+    
+    // Add update listener to destroy enemy if it goes too far off screen
+    enemy.update = function() {
+        const margin = enemySize * 2;
+        if (this.x < -margin || this.x > scene.game.config.width + margin ||
+            this.y < -margin || this.y > scene.game.config.height + margin) {
+            this.destroy();
+        }
+    };
+    
+    console.log('Enemy created:', {
+        position: { x, y },
+        health: enemy.health,
+        speed: enemy.speed,
+        points: enemy.points,
+        depth: enemy.depth,
+        size: enemySize
+    });
 }
 
 // Spawn a power-up
