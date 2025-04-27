@@ -2,7 +2,7 @@
 import {
     player, cursors, fireButton, bullets, enemies, powerUps,
     score, health, currentLevel, isGameOver, isMobile,
-    game
+    game, debugMode
 } from './init.js';
 
 // Import level configurations
@@ -68,9 +68,93 @@ export function initializeManagers(scene) {
     quizSystem = new QuizSystem(scene);
 }
 
+// Helper function to create a cool-looking bullet
+function createBullet(scene, x, y) {
+    const bulletSize = 16;
+    
+    try {
+        // Create a container for our bullet parts
+        const bullet = scene.add.container(x, y);
+        
+        // Create the main bullet body (elongated hexagon)
+        const bulletBody = scene.add.polygon(0, 0, [
+            -bulletSize/4, 0,          // Left middle
+            -bulletSize/8, -bulletSize/2,  // Left top
+            bulletSize/8, -bulletSize/2,   // Right top
+            bulletSize/4, 0,           // Right middle
+            bulletSize/8, bulletSize/2,    // Right bottom
+            -bulletSize/8, bulletSize/2    // Left bottom
+        ], 0xffff00);
+        
+        // Add a glowing effect
+        const glow = scene.add.circle(0, 0, bulletSize/3, 0xffff00, 0.5);
+        
+        // Add trail effect (smaller rectangles that fade out)
+        const trail1 = scene.add.rectangle(0, bulletSize/2, bulletSize/4, bulletSize/4, 0xffff00, 0.7);
+        const trail2 = scene.add.rectangle(0, bulletSize, bulletSize/6, bulletSize/4, 0xffff00, 0.4);
+        
+        // Add all parts to the container
+        bullet.add([trail2, trail1, glow, bulletBody]);
+        
+        // Add physics to the container
+        scene.physics.world.enable(bullet);
+        bullet.body.setSize(bulletSize/2, bulletSize);
+        
+        // Set velocity
+        bullet.body.setVelocityY(-400);
+        bullet.body.setBounce(0);
+        bullet.body.setCollideWorldBounds(false);
+        
+        // Add update function for the trail animation
+        bullet.update = function() {
+            trail1.y += 0.5;
+            trail2.y += 1;
+            if (trail1.y > bulletSize) trail1.y = bulletSize/2;
+            if (trail2.y > bulletSize*1.5) trail2.y = bulletSize;
+        };
+        
+        return bullet;
+    } catch (error) {
+        console.error('Error creating bullet:', error);
+        return null;
+    }
+}
+
+// Function to fire bullets
+function fireBullet(scene) {
+    if (!scene) {
+        console.error('No scene provided to fireBullet');
+        return;
+    }
+
+    try {
+        // Check if double shot is active
+        if (scene.isDoubleShot) {
+            // Create two bullets side by side
+            const bulletSpacing = 20; // Space between bullets
+            
+            // Left bullet
+            const bullet1 = createBullet(scene, player.x - bulletSpacing/2, player.y);
+            if (bullet1) bullets.add(bullet1);
+            
+            // Right bullet
+            const bullet2 = createBullet(scene, player.x + bulletSpacing/2, player.y);
+            if (bullet2) bullets.add(bullet2);
+            
+            console.log('Double shot fired!');
+        } else {
+            // Create a single bullet
+            const bullet = createBullet(scene, player.x, player.y);
+            if (bullet) bullets.add(bullet);
+        }
+    } catch (error) {
+        console.error('Error in fireBullet:', error);
+    }
+}
+
 // Spawn an enemy
 export function spawnEnemy(scene) {
-    if (window.gameState.isGameOver) {
+    if (!scene || window.gameState.isGameOver) {
         return;
     }
     
@@ -95,7 +179,7 @@ export function spawnEnemy(scene) {
     let x, y;
     
     // Enemy size adjusted to match player size
-    const enemySize = 128; // Increased from 96 to 128 for better hit detection
+    const enemySize = 64; // Reduced from 128 to 64 for smaller enemies
     
     switch(side) {
         case 0: // top
@@ -112,75 +196,39 @@ export function spawnEnemy(scene) {
             break;
     }
     
-    console.log('Spawning enemy at:', x, y);
+    // Create enemy sprite
+    let enemy;
+    if (scene.textures.exists('chips1')) {
+        enemy = scene.add.sprite(x, y, 'chips1');
+    } else {
+        enemy = scene.add.sprite(x, y, 'chips');
+    }
     
-    // Create enemy sprite using chips.gif
-    const enemy = scene.add.sprite(x, y, 'chips');
-    
-    // Set the display size first
     enemy.setDisplaySize(enemySize, enemySize);
     enemy.setOrigin(0.5, 0.5);
-    
-    // Set depth to ensure enemy appears above background
     enemy.setDepth(10);
     
-    // Add physics to enemy AFTER setting display size
     scene.physics.add.existing(enemy);
-    
-    // Make collision box MUCH LARGER (3.5x) for easier hitting
-    const collisionSize = enemySize * 3.5;
-    
-    // Set the large size
-    enemy.body.setSize(collisionSize, collisionSize);
-    
-    // EXTREME SHIFT: Moving hitboxes way down and right
-    // Use negative values to move right and down relative to sprite center
-    
-    // Calculate how much the box extends beyond the sprite (on each side)
-    const extraSize = (collisionSize - enemySize) / 2;
-    
-    // This would center the hitbox perfectly on the sprite:
-    // enemy.body.offset.set(-extraSize, -extraSize);
-    
-    // EXTREME shift - 200% right and 150% down 
-    // (this places the hitbox far to the right and below the sprite)
-    const rightShift = extraSize * 2.0;   // Increased from 1.25 to 2.0
-    const downShift = extraSize * 1.5;    // Increased from 1.0 to 1.5
-    
-    // Final offset: less negative means shifted right/down
-    enemy.body.offset.set(-extraSize + rightShift, -extraSize + downShift);
-    
-    // Force-set the body position to match the sprite
     enemy.body.reset(x, y);
-    
-    // Don't collide with world bounds - we'll handle cleanup ourselves
     enemy.body.setCollideWorldBounds(false);
     
-    // Debug visualization no longer needed
-    // enemy.body.debugShowBody = true;
-    // enemy.body.debugBodyColor = 0xff00ff;
+    if (debugMode) {
+        enemy.body.debugShowBody = true;
+        enemy.body.debugBodyColor = 0xff00ff;
+    }
     
-    // Fixed offset adjustment in pixels (additional fine-tuning)
-    // This adds a fixed pixel offset in addition to the percentage-based offset
-    enemy.body.offset.x += 30; // Push 30 more pixels right
-    enemy.body.offset.y += 20; // Push 20 more pixels down
-    
-    // Store enemy properties
     enemy.health = enemyConfig.health || 10;
     enemy.speed = enemyConfig.speed || 300;
     enemy.points = enemyConfig.points || 10;
     
-    // Calculate direction to player but only use for velocity, not rotation
     const angle = Phaser.Math.Angle.Between(x, y, player.x, player.y);
     enemy.body.setVelocity(
         Math.cos(angle) * enemy.speed,
         Math.sin(angle) * enemy.speed
     );
     
-    // Add to the enemies group
     enemies.add(enemy);
     
-    // Add update listener to destroy enemy if it goes too far off screen
     enemy.update = function() {
         const margin = enemySize * 2;
         if (this.x < -margin || this.x > scene.game.config.width + margin ||
@@ -188,15 +236,6 @@ export function spawnEnemy(scene) {
             this.destroy();
         }
     };
-    
-    console.log('Enemy created:', {
-        position: { x, y },
-        health: enemy.health,
-        speed: enemy.speed,
-        points: enemy.points,
-        depth: enemy.depth,
-        size: enemySize
-    });
 }
 
 // Spawn a power-up
@@ -242,11 +281,22 @@ export function spawnPowerUp(scene) {
             // Create Eva sprite for health power-up
             powerUp = scene.add.sprite(x, y, 'eva');
             
-            // Make Eva even larger for better visibility
+            // Set display size FIRST
             if (isMobile) {
-                powerUp.setDisplaySize(192, 192); // 50% larger (was 128)
+                powerUp.setDisplaySize(192, 192);
             } else {
-                powerUp.setDisplaySize(128, 128); // 33% larger (was 96)
+                powerUp.setDisplaySize(128, 128);
+            }
+            
+            // Add physics body WITHOUT any customization
+            scene.physics.world.enable(powerUp);
+            
+            // Do NOT set size or offset - let Phaser handle it
+            
+            // Debug visualization only
+            if (debugMode) {
+                powerUp.body.debugShowBody = true;
+                powerUp.body.debugBodyColor = 0xff00ff;
             }
         } else {
             // Create a rectangle with a glowing effect for other power-ups
@@ -278,12 +328,12 @@ export function spawnPowerUp(scene) {
                     this.destroy();
                 }
             };
+            
+            // Add physics to regular power-up
+            scene.physics.world.enable(powerUp);
+            powerUp.body.setSize(48, 48);
+            powerUp.body.setOffset(0, 0);
         }
-        
-        // Add physics to power-up
-        scene.physics.world.enable(powerUp);
-        powerUp.body.setSize(48, 48);
-        powerUp.body.setOffset(8, 8);
         
         // Set vertical velocity for downward movement
         powerUp.body.setVelocityY(150);
@@ -399,8 +449,8 @@ export function bulletHitBoss(bullet, boss) {
     }
 }
 
-// Handle player hitting an enemy
-export function playerHitEnemy(player, enemy, scene) {
+// Handle player hitting enemy
+function playerHitEnemy(player, enemy, scene) {
     // Only process if both objects are active
     if (!player.active || !enemy.active) return;
     
@@ -534,27 +584,47 @@ function updateHealthDisplay() {
 
 // Complete a level
 export function completeLevel(scene) {
-    // Display level complete text
-    levelText.setText(LEVELS[currentLevel].name + ' Complete!');
-    levelText.setVisible(true);
-    
-    // Move to next level after delay
-    scene.time.delayedCall(2000, () => {
-        // Start quiz before moving to next level
-        quizSystem.startQuiz(currentLevel);
+    if (!scene || !levelText) {
+        console.error('Invalid scene or levelText in completeLevel');
+        return;
+    }
+
+    try {
+        // Display level complete text
+        levelText.setText(LEVELS[currentLevel].name + ' Complete!');
+        levelText.setVisible(true);
         
-        // After quiz, move to next level
-        currentLevel++;
-        levelComplete = false;
-        
-        // Check if game is complete
-        if (currentLevel > 5) {
-            gameComplete = true;
-            showGameComplete(scene);
-        } else {
-            startLevel(scene, currentLevel);
-        }
-    });
+        // Move to next level after delay
+        scene.time.delayedCall(2000, () => {
+            try {
+                // Ensure quiz system exists
+                if (!quizSystem) {
+                    console.error('Quiz system not initialized');
+                    quizSystem = new QuizSystem(scene);
+                }
+
+                // Start quiz before moving to next level
+                console.log('Starting quiz for level:', currentLevel);
+                quizSystem.startQuiz(currentLevel);
+                
+                // After quiz, move to next level
+                currentLevel++;
+                levelComplete = false;
+                
+                // Check if game is complete
+                if (currentLevel > 5) {
+                    gameComplete = true;
+                    showGameComplete(scene);
+                } else {
+                    startLevel(scene, currentLevel);
+                }
+            } catch (error) {
+                console.error('Error in level completion callback:', error);
+            }
+        });
+    } catch (error) {
+        console.error('Error in completeLevel:', error);
+    }
 }
 
 // Show game over screen
@@ -772,4 +842,113 @@ export function updateHealth() {
     } catch (error) {
         console.error('Error updating health:', error);
     }
+}
+
+// Export all necessary functions
+export {
+    //spawnEnemy,
+    //spawnPowerUp,
+    playerHitEnemy,
+    createBullet,
+    fireBullet
+};
+
+// Game scene class
+export class GameScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene' });
+    }
+
+    create() {
+        // Initialize managers
+        soundManager = new SoundManager(this);
+        uiManager = new UIManager(this);
+        quizSystem = new QuizSystem(this);
+
+        // Initialize game objects
+        bullets = this.add.group();
+        enemies = this.add.group();
+        powerUps = this.add.group();
+
+        // Initialize background manager
+        backgroundManager = new BackgroundManager(this);
+
+        // Create player using the avatar sprite with fallback
+        try {
+            if (this.textures.exists('avatar')) {
+                console.log('Creating player sprite with avatar texture');
+                player = this.add.sprite(200, 500, 'avatar');
+                player.setDisplaySize(128, 128);
+                console.log('Player sprite created with dimensions:', {
+                    width: player.width,
+                    height: player.height,
+                    displayWidth: player.displayWidth,
+                    displayHeight: player.displayHeight
+                });
+            } else {
+                console.log('Avatar texture not found, using fallback rectangle');
+                player = this.add.rectangle(200, 500, 128, 128, 0x00ff00);
+            }
+        } catch (error) {
+            console.error('Error creating player sprite:', error);
+            player = this.add.rectangle(200, 500, 128, 128, 0x00ff00);
+        }
+
+        // Setup physics and controls
+        this.physics.add.existing(player);
+        player.body.setCollideWorldBounds(true);
+        
+        // Setup controls
+        cursors = this.input.keyboard.createCursorKeys();
+        fireButton = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+        
+        // Setup mobile controls if needed
+        if (isMobile) {
+            setupMobileControls(this);
+        }
+        
+        // Setup physics colliders
+        this.physics.add.overlap(bullets, enemies, bulletHitEnemy, null, this);
+        this.physics.add.overlap(player, enemies, (player, enemy) => playerHitEnemy(player, enemy, this), null, this);
+        this.physics.add.overlap(player, powerUps, collectPowerUp, null, this);
+        
+        // Initialize game state
+        window.gameState = {
+            health: health,
+            score: score,
+            currentLevel: currentLevel,
+            isGameOver: isGameOver,
+            isInvincible: false,
+            scene: this,
+            shootingCooldown: 150,
+            debug: {
+                enabled: debugMode
+            }
+        };
+        
+        // Create level text
+        levelText = this.add.text(200, 300, '', {
+            fontSize: '32px',
+            fill: '#fff'
+        });
+        levelText.setOrigin(0.5);
+        levelText.setVisible(false);
+        
+        // Add debug mode indicator if debug mode is enabled
+        if (debugMode) {
+            const debugText = this.add.text(10, 10, '🐞 DEBUG MODE', {
+                fontSize: '16px',
+                fill: '#ffffff',
+                backgroundColor: '#007700',
+                padding: { x: 5, y: 5 }
+            });
+            debugText.setDepth(1000);
+            debugText.setScrollFactor(0);
+        }
+        
+        // Start first level
+        startLevel(this, 1);
+    }
+
+    // ... rest of the GameScene class methods ...
 }

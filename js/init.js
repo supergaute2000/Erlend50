@@ -1,8 +1,9 @@
 // Game configuration
 import { LEVELS } from './levels.js';
-import { spawnEnemy, spawnPowerUp, playerHitEnemy } from './game.js';
+import { spawnEnemy, spawnPowerUp, playerHitEnemy, createBullet, fireBullet } from './game.js';
 import { SoundManager } from './sound.js';
 import { BackgroundManager } from './background.js';
+import './debug.js'; // Import debug module for automatic debug detection
 
 // Game variables - individual exports
 export let player;
@@ -18,6 +19,13 @@ export let isGameOver = false;
 export let isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 export let backgroundManager;
 export let game;
+
+// Simple debug mode detection - REPLACED BY debug.js module
+// export let debugMode = (window.location.pathname.indexOf('debug.html') !== -1);
+// console.log('Debug mode:', debugMode ? 'ENABLED (via debug.html)' : 'DISABLED');
+
+// The debugMode variable is now defined in debug.js and available globally
+export let debugMode = window.debugMode || false;
 
 // Game state variables
 export let currentBoss = null;
@@ -64,12 +72,17 @@ class GameScene extends Phaser.Scene {
         this.load.image('eva', `assets/images/eva.png?t=${new Date().getTime()}`);
         // Load chips.gif as a static image
         this.load.image('chips', 'assets/images/chips.gif');
+        // Load the new trimmed chips1.png image with cache busting
+        this.load.image('chips1', `assets/images/chips1.png?t=${new Date().getTime()}`);
         
         // Add loading error handler
         this.load.on('loaderror', (fileObj) => {
             console.error('Error loading asset:', fileObj.key, fileObj);
             if (fileObj.key === 'avatar') {
                 console.log('Avatar failed to load, using fallback rectangle');
+            }
+            if (fileObj.key === 'chips1') {
+                console.log('Chips1 image failed to load, falling back to original chips.gif');
             }
         });
 
@@ -92,6 +105,19 @@ class GameScene extends Phaser.Scene {
                 width: chipsTexture.width,
                 height: chipsTexture.height
             });
+            
+            // Log chips1 texture details
+            if (this.textures.exists('chips1')) {
+                const chips1Texture = this.textures.get('chips1');
+                console.log('Chips1 texture details:', {
+                    exists: true,
+                    key: chips1Texture.key,
+                    width: chips1Texture.width,
+                    height: chips1Texture.height
+                });
+            } else {
+                console.error('Chips1 texture does not exist after loading');
+            }
         });
 
         // Add file load success handler
@@ -172,6 +198,18 @@ class GameScene extends Phaser.Scene {
         levelText.setOrigin(0.5);
         levelText.setVisible(false);
         
+        // Add debug mode indicator if debug mode is enabled
+        if (debugMode) {
+            const debugText = this.add.text(10, 10, '🐞 DEBUG MODE', {
+                fontSize: '16px',
+                fill: '#ffffff',
+                backgroundColor: '#007700',
+                padding: { x: 5, y: 5 }
+            });
+            debugText.setDepth(1000);
+            debugText.setScrollFactor(0);
+        }
+        
         // Initialize sound manager
         soundManager = new SoundManager(this);
         
@@ -205,6 +243,88 @@ class GameScene extends Phaser.Scene {
         // Update enemies
         updateEnemies(this);
     }
+
+    createCoolBullet(x, y) {
+        const bulletSize = 16;
+        
+        try {
+            // Create a container for our bullet parts
+            const bullet = this.add.container(x, y);
+            
+            // Create the main bullet body (elongated hexagon)
+            const bulletBody = this.add.polygon(0, 0, [
+                -bulletSize/4, 0,          // Left middle
+                -bulletSize/8, -bulletSize/2,  // Left top
+                bulletSize/8, -bulletSize/2,   // Right top
+                bulletSize/4, 0,           // Right middle
+                bulletSize/8, bulletSize/2,    // Right bottom
+                -bulletSize/8, bulletSize/2    // Left bottom
+            ], 0xffff00);
+            
+            // Add a glowing effect
+            const glow = this.add.circle(0, 0, bulletSize/3, 0xffff00, 0.5);
+            
+            // Add trail effect (smaller rectangles that fade out)
+            const trail1 = this.add.rectangle(0, bulletSize/2, bulletSize/4, bulletSize/4, 0xffff00, 0.7);
+            const trail2 = this.add.rectangle(0, bulletSize, bulletSize/6, bulletSize/4, 0xffff00, 0.4);
+            
+            // Add all parts to the container
+            bullet.add([trail2, trail1, glow, bulletBody]);
+            
+            // Add physics to the container
+            this.physics.world.enable(bullet);
+            bullet.body.setSize(bulletSize/2, bulletSize);
+            
+            // Set velocity
+            bullet.body.setVelocityY(-400);
+            bullet.body.setBounce(0);
+            bullet.body.setCollideWorldBounds(false);
+            
+            // Add update function for the trail animation
+            bullet.update = function() {
+                trail1.y += 0.5;
+                trail2.y += 1;
+                if (trail1.y > bulletSize) trail1.y = bulletSize/2;
+                if (trail2.y > bulletSize*1.5) trail2.y = bulletSize;
+            };
+            
+            return bullet;
+        } catch (error) {
+            console.error('Error creating bullet:', error);
+            return null;
+        }
+    }
+
+    fireBullet() {
+        if (!this) {
+            console.error('No scene provided to fireBullet');
+            return;
+        }
+
+        try {
+            // Check if double shot is active
+            if (this.isDoubleShot) {
+                // Create two bullets side by side
+                const bulletSpacing = 20; // Space between bullets
+                
+                // Left bullet
+                const bullet1 = createBullet(this, player.x - bulletSpacing/2, player.y);
+                if (bullet1) bullets.add(bullet1);
+                
+                // Right bullet
+                const bullet2 = createBullet(this, player.x + bulletSpacing/2, player.y);
+                if (bullet2) bullets.add(bullet2);
+                
+                console.log('Double shot fired!');
+            } else {
+                // Create a single bullet
+                const bullet = createBullet(this, player.x, player.y);
+                if (bullet) bullets.add(bullet);
+            }
+        } catch (error) {
+            console.error('Error in fireBullet:', error);
+        }
+    }
 }
 
 // Game configuration
@@ -223,14 +343,184 @@ const config = {
         default: 'arcade',
         arcade: {
             gravity: { y: 0 },
-            debug: false // Disable debug visualization of bounding boxes
+            debug: debugMode // Set physics debug based on debug.html detection
         }
     },
+    render: {
+        antialias: true,
+        pixelArt: false,
+        roundPixels: false,
+        transparent: true
+    },
+    // Reduce logging to minimize cross-origin issues
+    banner: false,
     scene: GameScene
 };
 
-// Initialize game
-game = new Phaser.Game(config);
+// Initialize game with module isolation and error handling
+try {
+    // Start with a clean console
+    console.clear();
+    console.log('Starting game with automatic debug detection...');
+    
+    // Set crossOrigin on all images loaded via Phaser
+    config.loader = {
+        ...config.loader,
+        crossOrigin: 'anonymous'
+    };
+    
+    // Create the game instance
+    game = new Phaser.Game(config);
+    
+    // Only create module wrapping and debug UI in debug mode
+    if (debugMode) {
+        console.log('Debug mode active - enabling error tracking and diagnostics');
+        
+        // Create module wrapper to help identify where errors occur
+        window.moduleWrap = function(moduleName, fn) {
+            return function() {
+                try {
+                    return fn.apply(this, arguments);
+                } catch (error) {
+                    console.error(`Error in module: ${moduleName}`, error);
+                    // Try to display in-game error
+                    if (game && game.scene && game.scene.scenes.length > 0) {
+                        const scene = game.scene.scenes[0];
+                        scene.add.text(10, 40, `ERROR in ${moduleName}: ${error.message}`, {
+                            fontSize: '14px',
+                            fill: '#ff0000',
+                            backgroundColor: '#000000',
+                            padding: { x: 5, y: 5 }
+                        }).setDepth(1000).setScrollFactor(0);
+                    }
+                    throw error; // Re-throw to preserve original stack trace
+                }
+            };
+        };
+        
+        // Wrap key functions for error isolation
+        const originalFireBullet = fireBullet;
+        fireBullet = moduleWrap('fireBullet', originalFireBullet);
+        
+        const originalBulletHitEnemy = bulletHitEnemy;
+        bulletHitEnemy = moduleWrap('bulletHitEnemy', originalBulletHitEnemy);
+        
+        // Force debug visuals for all physics bodies
+        game.events.on('ready', function() {
+            if (game.scene && game.scene.scenes.length > 0) {
+                const scene = game.scene.scenes[0];
+                scene.events.on('create', function() {
+                    console.log('Setting up debug visuals for all physics bodies');
+                    scene.physics.world.drawDebug = true;
+                });
+            }
+        });
+    }
+    
+    // Add restart button always visible in top-right corner
+    if (game.scene && game.scene.scenes.length > 0) {
+        const scene = game.scene.scenes[0];
+        scene.events.once('create', function() {
+            const restartButton = scene.add.text(
+                scene.cameras.main.width - 110, 
+                10, 
+                '🔄 RESTART', 
+                {
+                    fontSize: '16px',
+                    fill: '#ffffff',
+                    backgroundColor: '#222222',
+                    padding: { x: 8, y: 5 }
+                }
+            ).setInteractive();
+            
+            restartButton.on('pointerdown', () => {
+                window.location.reload();
+            });
+            
+            restartButton.setDepth(1000);
+            restartButton.setScrollFactor(0);
+        });
+    }
+    
+    console.log('Game created successfully', debugMode ? 'with debug features' : 'in normal mode');
+} catch (startupError) {
+    console.error('ERROR DURING GAME STARTUP:', startupError);
+    alert('Game failed to start: ' + startupError.message);
+}
+
+// More robust global error handling
+window.onerror = function(message, source, lineno, colno, error) {
+    // Create a detailed error report
+    const errorDetails = {
+        message: message,
+        source: source || 'unknown source',
+        line: lineno || 'unknown line',
+        column: colno || 'unknown column',
+        stack: error ? error.stack : 'No stack trace',
+        time: new Date().toISOString(),
+        gameState: game ? {
+            isRunning: game.isRunning,
+            sceneCount: game.scene ? game.scene.scenes.length : 'unknown'
+        } : 'Game not initialized',
+        browserInfo: {
+            userAgent: navigator.userAgent,
+            language: navigator.language,
+            platform: navigator.platform
+        }
+    };
+    
+    // Log the detailed report
+    console.error('✖️ DETAILED GAME ERROR:', errorDetails);
+    
+    // Try to display error in game
+    try {
+        if (game && game.scene && game.scene.scenes && game.scene.scenes.length > 0) {
+            const activeScene = game.scene.scenes[0];
+            const errorText = activeScene.add.text(10, 40, 'ERROR: ' + message, {
+                fontSize: '14px',
+                fill: '#ff0000',
+                backgroundColor: '#000000',
+                padding: { x: 5, y: 5 }
+            });
+            errorText.setDepth(1000);
+            errorText.setScrollFactor(0);
+            
+            // Add a restart button
+            const restartButton = activeScene.add.text(10, 70, '🔄 RESTART GAME', {
+                fontSize: '16px', 
+                fill: '#ffffff',
+                backgroundColor: '#aa0000',
+                padding: { x: 10, y: 8 }
+            }).setInteractive();
+            
+            restartButton.on('pointerdown', () => {
+                console.log('Manual game restart requested');
+                window.location.reload();
+            });
+            
+            restartButton.setDepth(1000);
+            restartButton.setScrollFactor(0);
+        }
+    } catch (displayError) {
+        console.error('Failed to display error message:', displayError);
+    }
+    
+    // If this is a CORS "Script error", suggest solutions
+    if (message === 'Script error.' && !source && !lineno) {
+        console.warn('This appears to be a cross-origin error. Possible solutions:');
+        console.warn('1. Add crossorigin="anonymous" to script tags');
+        console.warn('2. Ensure CORS headers are set properly on your server');
+        console.warn('3. Use a local development server instead of file:// URLs');
+    }
+    
+    return true; // Prevents the default browser error handling
+};
+
+// Enhanced promise rejection handler
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled Promise Rejection:', event.reason);
+    console.error('Promise rejection stack:', event.reason ? event.reason.stack : 'No stack trace');
+});
 
 // Helper functions
 function setupMobileControls(scene) {
@@ -331,76 +621,6 @@ function handlePlayerMovement(scene) {
             player.body.setVelocityY(0);
         }
     }
-}
-
-function fireBullet(scene) {
-    const bulletSize = 24; // Return to smaller size as requested
-    // Check if double shot is active
-    if (scene.isDoubleShot) {
-        // Create two bullets side by side
-        const bulletSpacing = 20; // Space between bullets
-        
-        // Left bullet
-        const bullet1 = scene.add.rectangle(player.x - bulletSpacing/2, player.y, bulletSize, bulletSize, 0xffff00);
-        bullet1.setOrigin(0.5, 0.5); // Center origin explicitly
-        
-        // Add physics AFTER setting display properties
-        scene.physics.add.existing(bullet1);
-        
-        // Set the physics body to exactly match the rectangle
-        bullet1.body.setSize(bulletSize, bulletSize, true);
-        bullet1.body.setOffset(0, 0);
-        
-        // Make sure body position is correct
-        bullet1.body.reset(player.x - bulletSpacing/2, player.y);
-        
-        // Set movement
-        bullet1.body.setVelocityY(-400);
-        bullet1.body.setBounce(0);
-        bullet1.body.setCollideWorldBounds(false);
-        
-        // Add to group
-        bullets.add(bullet1);
-        
-        // Right bullet - same pattern
-        const bullet2 = scene.add.rectangle(player.x + bulletSpacing/2, player.y, bulletSize, bulletSize, 0xffff00);
-        bullet2.setOrigin(0.5, 0.5);
-        scene.physics.add.existing(bullet2);
-        bullet2.body.setSize(bulletSize, bulletSize, true);
-        bullet2.body.setOffset(0, 0);
-        bullet2.body.reset(player.x + bulletSpacing/2, player.y);
-        bullet2.body.setVelocityY(-400);
-        bullet2.body.setBounce(0);
-        bullet2.body.setCollideWorldBounds(false);
-        bullets.add(bullet2);
-        
-        console.log('Double shot fired!');
-    } else {
-        // Create a single bullet
-        const bullet = scene.add.rectangle(player.x, player.y, bulletSize, bulletSize, 0xffff00);
-        bullet.setOrigin(0.5, 0.5);
-        
-        // Add physics AFTER setting display properties
-        scene.physics.add.existing(bullet);
-        
-        // Set the physics body to exactly match the rectangle
-        bullet.body.setSize(bulletSize, bulletSize, true);
-        bullet.body.setOffset(0, 0);
-        
-        // Make sure body position is correct
-        bullet.body.reset(player.x, player.y);
-        
-        // Set movement
-        bullet.body.setVelocityY(-400);
-        bullet.body.setBounce(0);
-        bullet.body.setCollideWorldBounds(false);
-        
-        // Add to group
-        bullets.add(bullet);
-    }
-    
-    // Skip playing sound for now
-    // scene.sound.play('shoot');
 }
 
 function bulletHitEnemy(bullet, enemy) {
