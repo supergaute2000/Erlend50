@@ -18,7 +18,7 @@ import { SoundManager } from './sound.js';
 import { UIManager } from './ui.js';
 
 // Import high score functions
-import { saveHighScore } from './highscores.js';
+import { saveHighScore, getHighScores } from './highscores.js';
 
 // Game state variables
 let currentBoss = null;
@@ -636,88 +636,193 @@ export function showGameOver(scene) {
         return;
     }
 
-    // Create semi-transparent background
-    const bg = scene.add.rectangle(0, 0, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.8)
-        .setOrigin(0)
-        .setDepth(1000);
+    // Remove any existing game over elements
+    const existingInput = document.getElementById('playerNameInput');
+    if (existingInput) existingInput.remove();
+    const existingLabel = document.querySelector('label[for="playerNameInput"]');
+    if (existingLabel) existingLabel.remove();
 
-    // Create game over text
-    const gameOverText = scene.add.text(scene.cameras.main.centerX, scene.cameras.main.centerY - 150, 'GAME OVER', {
+    // Add semi-transparent black background (add directly to scene, not container)
+    const bg = scene.add.rectangle(0, 0, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.8)
+        .setOrigin(0, 0)
+        .setDepth(999);
+
+    // Create container for game over screen (centered)
+    const gameOverContainer = scene.add.container(scene.cameras.main.centerX, scene.cameras.main.centerY);
+    gameOverContainer.setDepth(1000);
+
+    // Add game over text
+    const gameOverText = scene.add.text(0, -220, 'GAME OVER', {
         fontSize: '64px',
         fill: '#ff0000',
         fontFamily: 'Arial',
-        fontWeight: 'bold'
-    }).setOrigin(0.5).setDepth(1001);
+        fontWeight: 'bold',
+        resolution: 2,
+        antialias: true
+    }).setOrigin(0.5);
+    gameOverContainer.add(gameOverText);
 
-    // Create final score text
-    const finalScoreText = scene.add.text(scene.cameras.main.centerX, scene.cameras.main.centerY - 50, `Final Score: ${score}`, {
+    // Add final score text (only once)
+    const finalScoreText = scene.add.text(0, -140, `Final Score: ${score}`, {
         fontSize: '32px',
         fill: '#ffffff',
-        fontFamily: 'Arial'
-    }).setOrigin(0.5).setDepth(1001);
+        fontFamily: 'Arial',
+        resolution: 2,
+        antialias: true
+    }).setOrigin(0.5);
+    gameOverContainer.add(finalScoreText);
 
-    // Create "Save Score" text
-    const saveScoreText = scene.add.text(scene.cameras.main.centerX, scene.cameras.main.centerY + 20, 'Save Score', {
-        fontSize: '32px',
+    // Create player name label
+    const nameLabel = scene.add.text(0, -60, 'Player Name:', {
+        fontSize: '24px',
         fill: '#ffffff',
-        fontFamily: 'Arial'
-    }).setOrigin(0.5).setDepth(1001);
+        fontFamily: 'Arial',
+        resolution: 2,
+        antialias: true
+    }).setOrigin(0.5);
+    gameOverContainer.add(nameLabel);
+
+    // Calculate absolute position for input based on label position
+    //const labelWorldPos = nameLabel.getBottomCenter();
+    const inputY = 0; //labelWorldPos.y - ; // Position 40px below the label
 
     // Create player name input
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.value = 'gaute'; // Default value
+    nameInput.id = 'playerNameInput';
+    nameInput.value = 'gaute';
     nameInput.style.position = 'absolute';
     nameInput.style.left = '50%';
-    nameInput.style.top = '55%';
-    nameInput.style.transform = 'translate(-50%, -50%)';
-    nameInput.style.width = '200px';
-    nameInput.style.padding = '10px';
-    nameInput.style.fontSize = '24px';
+    nameInput.style.top = '50%';
+    nameInput.style.marginBottom = '60px';
+    nameInput.style.transform = 'translateY(-50%)';
+    nameInput.style.transform = 'translateX(-50%)'; // Only center horizontally
+    nameInput.style.width = '160px';
+    nameInput.style.padding = '5px';
+    nameInput.style.fontSize = '16px';
     nameInput.style.textAlign = 'center';
-    nameInput.style.backgroundColor = '#000000';
-    nameInput.style.color = '#ffffff';
-    nameInput.style.border = '2px solid #333333';
-    nameInput.style.borderRadius = '5px';
-    nameInput.style.zIndex = '1002';
+    nameInput.style.backgroundColor = '#222';
+    nameInput.style.color = '#fff';
+    nameInput.style.border = '2px solid #888';
+    nameInput.style.borderRadius = '2px';
+    nameInput.style.zIndex = '1003';
     document.body.appendChild(nameInput);
+    nameInput.focus();
 
-    // Create restart button
-    const restartButton = scene.add.text(scene.cameras.main.centerX, scene.cameras.main.centerY + 150, 'Click to Restart', {
-        fontSize: '32px',
+    // Add window resize handler to maintain relative positioning
+    const updateInputPosition = () => {
+        const newLabelPos = nameLabel.getTopCenter();
+        nameInput.style.top = `${newLabelPos.y + 40}px`;
+    };
+    window.addEventListener('resize', updateInputPosition);
+
+    // Store resize handler for cleanup
+    const cleanupInput = () => {
+        window.removeEventListener('resize', updateInputPosition);
+        nameInput.remove();
+    };
+
+    // Create button style object
+    const buttonStyle = {
+        fontSize: '24px',
         fill: '#ffffff',
-        fontFamily: 'Arial'
-    })
-    .setOrigin(0.5)
-    .setDepth(1001)
-    .setInteractive({ useHandCursor: true });
+        fontFamily: 'Arial',
+        backgroundColor: '#333333',
+        padding: { x: 20, y: 10 },
+        resolution: 2,
+        antialias: true
+    };
 
-    // Make save score text interactive
+    // Add save score button (positioned relative to input)
+    const saveScoreText = scene.add.text(0, 80, 'Save Score', buttonStyle).setOrigin(0.5);
     saveScoreText.setInteractive({ useHandCursor: true });
+    gameOverContainer.add(saveScoreText);
 
-    // Save score handler
+    // Add view high scores button
+    const viewHighScoresText = scene.add.text(0, 140, 'View High Scores', buttonStyle).setOrigin(0.5);
+    viewHighScoresText.setInteractive({ useHandCursor: true });
+    gameOverContainer.add(viewHighScoresText);
+
+    // Add restart button
+    const restartButton = scene.add.text(0, 200, 'Play Again', buttonStyle).setOrigin(0.5);
+    restartButton.setInteractive({ useHandCursor: true });
+    gameOverContainer.add(restartButton);
+
+    // Save state
+    let isSaving = false;
+    let isScoreSaved = false;
+
+    // Button handlers
+    saveScoreText.on('pointerover', () => saveScoreText.setFill('#ffff00'));
+    saveScoreText.on('pointerout', () => saveScoreText.setFill('#ffffff'));
     saveScoreText.on('pointerdown', async () => {
-        const playerName = nameInput.value.trim() || 'Anonymous';
-        const highScores = await saveHighScore(playerName, score);
-        if (highScores) {
-            // Show success message
-            saveScoreText.setText('Score Saved!');
-            saveScoreText.setFill('#00ff00');
+        if (isSaving || isScoreSaved) return;
+        await handleSaveScore();
+    });
+
+    viewHighScoresText.on('pointerover', () => viewHighScoresText.setFill('#ffff00'));
+    viewHighScoresText.on('pointerout', () => viewHighScoresText.setFill('#ffffff'));
+    viewHighScoresText.on('pointerdown', async () => {
+        try {
+            const highScores = await getHighScores();
             
-            // Disable further saves
-            saveScoreText.removeInteractive();
+            // Create high scores overlay
+            const scoresContainer = scene.add.container(0, 0);
+            scoresContainer.setDepth(2000);
             
-            // Remove input field
-            nameInput.remove();
+            // Add semi-transparent background
+            const scoresBg = scene.add.rectangle(0, 0, scene.cameras.main.width, scene.cameras.main.height, 0x000000, 0.9);
+            scoresBg.setOrigin(0, 0);
+            scoresContainer.add(scoresBg);
+            
+            // Add title
+            const title = scene.add.text(scene.cameras.main.centerX, 50, 'HIGH SCORES', {
+                fontSize: '36px',
+                fill: '#ffff00',
+                fontFamily: 'Arial',
+                fontWeight: 'bold'
+            }).setOrigin(0.5);
+            scoresContainer.add(title);
+            
+            // Add scores
+            highScores.forEach((score, index) => {
+                const scoreText = scene.add.text(
+                    scene.cameras.main.centerX,
+                    120 + (index * 40),
+                    `${index + 1}. ${score.name} - ${score.score}`,
+                    {
+                        fontSize: '24px',
+                        fill: '#ffffff',
+                        fontFamily: 'Arial'
+                    }
+                ).setOrigin(0.5);
+                scoresContainer.add(scoreText);
+            });
+            
+            // Add close button
+            const closeButton = scene.add.text(scene.cameras.main.centerX, 550, 'CLOSE', {
+                fontSize: '24px',
+                fill: '#00ff00',
+                fontFamily: 'Arial',
+                backgroundColor: '#333333',
+                padding: { x: 20, y: 10 }
+            }).setOrigin(0.5);
+            closeButton.setInteractive({ useHandCursor: true });
+            scoresContainer.add(closeButton);
+            
+            closeButton.on('pointerdown', () => {
+                scoresContainer.destroy();
+            });
+        } catch (error) {
+            console.error('Error showing high scores:', error);
         }
     });
 
-    // Restart button handler
+    restartButton.on('pointerover', () => restartButton.setFill('#ffff00'));
+    restartButton.on('pointerout', () => restartButton.setFill('#ffffff'));
     restartButton.on('pointerdown', () => {
-        // Clean up UI elements
-        nameInput.remove();
-        
-        // Reset game state
+        cleanupInput(); // Use the new cleanup function
+        gameOverContainer.destroy();
         window.gameState = {
             health: 100,
             score: 0,
@@ -726,32 +831,38 @@ export function showGameOver(scene) {
             isInvincible: false,
             scene: scene
         };
-        
-        // Restart the scene
         scene.scene.restart();
     });
 
-    // Handle Enter key press in name input
-    nameInput.addEventListener('keypress', async (e) => {
-        if (e.key === 'Enter') {
-            const playerName = nameInput.value.trim() || 'Anonymous';
-            const highScores = await saveHighScore(playerName, score);
-            if (highScores) {
-                // Show success message
-                saveScoreText.setText('Score Saved!');
-                saveScoreText.setFill('#00ff00');
-                
-                // Disable further saves
-                saveScoreText.removeInteractive();
-                
-                // Remove input field
-                nameInput.remove();
-            }
+    // Handle Enter key for saving score
+    nameInput.addEventListener('keypress', (event) => {
+        if (event.key === 'Enter') {
+            handleSaveScore();
         }
     });
 
-    // Pause the game
-    scene.scene.pause();
+    async function handleSaveScore() {
+        if (isSaving || isScoreSaved) return;
+        
+        isSaving = true;
+        const playerName = nameInput.value.trim() || 'Anonymous';
+        cleanupInput(); // Use the new cleanup function
+        
+        saveScoreText.setText('Saving...');
+        saveScoreText.setFill('#ffff00');
+        
+        try {
+            await saveHighScore(playerName, score);
+            saveScoreText.setText('Score Saved!');
+            saveScoreText.setFill('#00ff00');
+            isScoreSaved = true;
+        } catch (error) {
+            console.error('Error saving score:', error);
+            saveScoreText.setText('Error Saving Score');
+            saveScoreText.setFill('#ff0000');
+            isSaving = false;
+        }
+    }
 }
 
 // Show game complete screen
@@ -780,7 +891,25 @@ export function showGameComplete(scene) {
     birthdayMessage.setOrigin(0.5);
     
     // Save high score
-    saveHighScore('Player', score);
+    try {
+        saveHighScore('Player', score).catch(error => {
+            console.error('Error saving final score:', error);
+        });
+    } catch (error) {
+        console.error('Error in saveHighScore call:', error);
+    }
+    
+    // Add high scores button
+    const highScoresButton = scene.add.text(200, 400, 'View High Scores', { 
+        fontSize: '32px', 
+        fill: '#00ff00' 
+    });
+    highScoresButton.setOrigin(0.5);
+    highScoresButton.setInteractive();
+    highScoresButton.on('pointerdown', async () => {
+        // Display high scores
+        await displayHighScores(scene);
+    });
     
     // Add restart button
     const restartButton = scene.add.text(200, 450, 'Play Again', { 
@@ -841,6 +970,109 @@ export function updateHealth() {
         }
     } catch (error) {
         console.error('Error updating health:', error);
+    }
+}
+
+// Function to display high scores
+export async function displayHighScores(scene) {
+    try {
+        // Get high scores (will use localStorage fallback if server fails)
+        const highScores = await getHighScores();
+        
+        // Create a container for the high scores
+        const container = scene.add.container(200, 300);
+        container.setDepth(1000);
+        
+        // Add background
+        const bg = scene.add.rectangle(0, 0, 400, 500, 0x000000, 0.8);
+        bg.setOrigin(0.5);
+        container.add(bg);
+        
+        // Add title
+        const title = scene.add.text(0, -200, 'HIGH SCORES', {
+            fontSize: '36px',
+            fontFamily: 'Arial',
+            color: '#ffff00',
+            stroke: '#000000',
+            strokeThickness: 6
+        });
+        title.setOrigin(0.5);
+        container.add(title);
+        
+        // Add scores
+        if (highScores && highScores.length > 0) {
+            highScores.forEach((score, index) => {
+                const y = -150 + (index * 40);
+                
+                // Rank
+                const rank = scene.add.text(-150, y, `${index + 1}.`, {
+                    fontSize: '24px',
+                    fontFamily: 'Arial',
+                    color: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                });
+                rank.setOrigin(0, 0.5);
+                container.add(rank);
+                
+                // Name
+                const name = scene.add.text(-100, y, score.name, {
+                    fontSize: '24px',
+                    fontFamily: 'Arial',
+                    color: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                });
+                name.setOrigin(0, 0.5);
+                container.add(name);
+                
+                // Score
+                const scoreText = scene.add.text(100, y, score.score.toString(), {
+                    fontSize: '24px',
+                    fontFamily: 'Arial',
+                    color: '#ffffff',
+                    stroke: '#000000',
+                    strokeThickness: 4
+                });
+                scoreText.setOrigin(1, 0.5);
+                container.add(scoreText);
+            });
+        } else {
+            // No scores message
+            const noScores = scene.add.text(0, 0, 'No high scores yet!', {
+                fontSize: '24px',
+                fontFamily: 'Arial',
+                color: '#ffffff',
+                stroke: '#000000',
+                strokeThickness: 4
+            });
+            noScores.setOrigin(0.5);
+            container.add(noScores);
+        }
+        
+        // Add close button
+        const closeButton = scene.add.rectangle(0, 200, 150, 50, 0x00ff00);
+        closeButton.setOrigin(0.5);
+        closeButton.setInteractive();
+        container.add(closeButton);
+        
+        const closeText = scene.add.text(0, 200, 'CLOSE', {
+            fontSize: '24px',
+            fontFamily: 'Arial',
+            color: '#000000'
+        });
+        closeText.setOrigin(0.5);
+        container.add(closeText);
+        
+        // Add button interaction
+        closeButton.on('pointerdown', () => {
+            container.destroy();
+        });
+        
+        return container;
+    } catch (error) {
+        console.error('Error displaying high scores:', error);
+        return null;
     }
 }
 
@@ -951,4 +1183,12 @@ export class GameScene extends Phaser.Scene {
     }
 
     // ... rest of the GameScene class methods ...
+}
+
+function cleanupInput(nameInput) {
+    nameInput.blur();
+    nameInput.disabled = true;
+    setTimeout(() => {
+        nameInput.remove();
+    }, 0); // Defer removal to next tick
 }

@@ -14,17 +14,48 @@ app.use(express.static(__dirname));
 const highScoresPath = path.join(__dirname, 'highscores.json');
 
 // Initialize high scores file if it doesn't exist
-if (!fs.existsSync(highScoresPath)) {
-    fs.writeFileSync(highScoresPath, JSON.stringify([]));
+function ensureHighScoresFile() {
+    try {
+        if (!fs.existsSync(highScoresPath)) {
+            console.log('Creating new high scores file');
+            fs.writeFileSync(highScoresPath, JSON.stringify([]));
+        }
+    } catch (error) {
+        console.error('Error ensuring high scores file exists:', error);
+        // Continue anyway - we'll handle errors when reading/writing
+    }
+}
+
+// Read high scores with error handling
+function readHighScores() {
+    try {
+        ensureHighScoresFile();
+        return JSON.parse(fs.readFileSync(highScoresPath, 'utf8'));
+    } catch (error) {
+        console.error('Error reading high scores:', error);
+        return []; // Return empty array if file can't be read
+    }
+}
+
+// Write high scores with error handling
+function writeHighScores(scores) {
+    try {
+        ensureHighScoresFile();
+        fs.writeFileSync(highScoresPath, JSON.stringify(scores, null, 2));
+        return true;
+    } catch (error) {
+        console.error('Error writing high scores:', error);
+        return false;
+    }
 }
 
 // Get high scores
 app.get('/scores', (req, res) => {
     try {
-        const highScores = JSON.parse(fs.readFileSync(highScoresPath, 'utf8'));
+        const highScores = readHighScores();
         res.json(highScores);
     } catch (error) {
-        console.error('Error reading high scores:', error);
+        console.error('Error in GET /scores:', error);
         res.status(500).json({ error: 'Failed to read high scores' });
     }
 });
@@ -39,7 +70,7 @@ app.post('/scores', (req, res) => {
         }
         
         // Read existing high scores
-        const highScores = JSON.parse(fs.readFileSync(highScoresPath, 'utf8'));
+        const highScores = readHighScores();
         
         // Add new score
         highScores.push({
@@ -55,11 +86,15 @@ app.post('/scores', (req, res) => {
         const topScores = highScores.slice(0, 10);
         
         // Save back to file
-        fs.writeFileSync(highScoresPath, JSON.stringify(topScores, null, 2));
+        const success = writeHighScores(topScores);
         
-        res.json({ success: true, highScores: topScores });
+        if (success) {
+            res.json({ success: true, highScores: topScores });
+        } else {
+            res.status(500).json({ error: 'Failed to save high score to file' });
+        }
     } catch (error) {
-        console.error('Error saving high score:', error);
+        console.error('Error in POST /scores:', error);
         res.status(500).json({ error: 'Failed to save high score' });
     }
 });
@@ -67,6 +102,11 @@ app.post('/scores', (req, res) => {
 // Serve index.html for the root route
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Handle 404 errors
+app.use((req, res) => {
+    res.status(404).sendFile(path.join(__dirname, 'index.html'));
 });
 
 // Start the server

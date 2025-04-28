@@ -1,9 +1,12 @@
 services:
   - type: web
     name: bror50-game
-    env: node
-    buildCommand: npm install
-    startCommand: node server.js
+    env: python
+    buildCommand: echo "No build step needed"
+    startCommand: python server.py
     envVars:
       - key: PORT
-        value: 10000 
+        value: 8000
+    healthCheckPath: /
+    autoDeploy: true
+    plan: free 
